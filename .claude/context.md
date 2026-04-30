@@ -200,3 +200,4 @@ Everything else: MEDIUM
 - [#8] lib/session.ts + lib/utils.ts implemented — helpers ready
 - [#9] All four data hooks implemented — polling intervals set, loading/error states handled
 - [#10] PriceBar implemented — live price, change, high/low, session, live indicator
+- [#11] TradingViewChart implemented — XAUUSD 1H dark theme, RSI + MACD
