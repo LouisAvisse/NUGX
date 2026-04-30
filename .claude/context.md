@@ -199,3 +199,4 @@ Everything else: MEDIUM
 - [#7] API route shells with typed mocks — all four routes returning correct shapes
 - [#8] lib/session.ts + lib/utils.ts implemented — helpers ready
 - [#9] All four data hooks implemented — polling intervals set, loading/error states handled
+- [#10] PriceBar implemented — live price, change, high/low, session, live indicator
