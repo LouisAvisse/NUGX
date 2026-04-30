@@ -202,7 +202,8 @@ export default function SignalsPanel() {
           display: 'flex',
           flexDirection: 'row',
           alignItems: 'center',
-          gap: '20px',
+          flexWrap: 'wrap',
+          gap: '20px 24px',
         }}
       >
         <span style={sectionLabelStyle}>MACRO</span>
@@ -311,7 +312,8 @@ export default function SignalsPanel() {
           display: 'flex',
           flexDirection: 'row',
           alignItems: 'center',
-          gap: '20px',
+          flexWrap: 'wrap',
+          gap: '20px 24px',
         }}
       >
         <span style={sectionLabelStyle}>TECHNIQUE</span>

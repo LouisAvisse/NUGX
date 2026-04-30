@@ -22,7 +22,7 @@
 
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useAnalysis } from '@/lib/hooks/useAnalysis'
 import { useGoldPrice } from '@/lib/hooks/useGoldPrice'
 import { useSignals } from '@/lib/hooks/useSignals'
@@ -405,6 +405,22 @@ export default function AnalysisPanel() {
     technicals.indicators,
     calendar.data,
   ])
+
+  // Auto-trigger ONCE on mount, as soon as the price hook has
+  // its first reading. Pre-populates the Copilot card without
+  // requiring a user click — useful for client previews where
+  // the dashboard should look "live" the moment it loads.
+  // Subsequent runs go through the manual button or R shortcut
+  // (the countdown hook never reaches 0 in practice; the auto-
+  // trigger effect below stays in place for symmetry).
+  const hasAutoTriggered = useRef(false)
+  useEffect(() => {
+    if (hasAutoTriggered.current) return
+    if (!goldPrice.data) return
+    if (calendar.data?.clearToTrade === false) return
+    hasAutoTriggered.current = true
+    trigger(buildRequest())
+  }, [goldPrice.data, calendar.data, trigger, buildRequest])
 
   // Auto-trigger when the countdown wraps.
   useEffect(() => {
@@ -929,8 +945,16 @@ export default function AnalysisPanel() {
         )}
       </div>
 
-      {/* 7. Action button. Four states: loading, calendar-blocked,
-            error (RETRY), idle (RUN). */}
+      {/* 7. Action button — primary CTA for the dashboard.
+            Four states:
+              idle             → white bg + black text (CTA pop)
+              hover (idle)     → very-light-grey bg, same darker text
+              loading          → muted grey bg + dim text, disabled
+              calendar-blocked → amber-tinted dark bg + amber text,
+                                 disabled
+            Outline-style was muted enough to read as secondary;
+            now this is unmistakably the action the trader is
+            meant to take. */}
       <button
         className="terminal-btn"
         onClick={onClickRun}
@@ -938,30 +962,36 @@ export default function AnalysisPanel() {
         onMouseEnter={() => setHoverBtn(true)}
         onMouseLeave={() => setHoverBtn(false)}
         style={{
-          margin: '10px 12px',
+          margin: '12px',
           width: 'calc(100% - 24px)',
-          height: '32px',
-          background: 'transparent',
+          height: '36px',
+          background: loading
+            ? '#1a1a1a'
+            : calendarBlocked
+              ? '#1a0e00'
+              : hoverBtn
+                ? '#e5e5e5'
+                : '#f5f5f5',
           border: `1px solid ${
             loading
               ? '#222222'
               : calendarBlocked
                 ? '#3a2200'
                 : hoverBtn
-                  ? '#888888'
-                  : '#2a2a2a'
+                  ? '#cccccc'
+                  : '#f5f5f5'
           }`,
           color: loading
             ? '#666666'
             : calendarBlocked
               ? '#fbbf24'
-              : hoverBtn
-                ? '#e5e5e5'
-                : '#999999',
-          fontFamily: 'var(--font-mono)',
-          fontSize: '10px',
-          letterSpacing: '0.1em',
+              : '#0a0a0a',
+          fontFamily: 'var(--font-sans)',
+          fontSize: '11px',
+          fontWeight: 600,
+          letterSpacing: '0.12em',
           cursor: loading || calendarBlocked ? 'not-allowed' : 'pointer',
+          borderRadius: '2px',
         }}
       >
         {loading

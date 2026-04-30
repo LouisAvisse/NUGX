@@ -96,7 +96,12 @@ export default function BottomBar() {
           padding: '0 16px',
           gap: 0,
           background: 'transparent',
-          overflow: 'hidden',
+          // overflow-x:auto on narrow viewports so the stats
+          // scroll horizontally instead of clipping; on wide
+          // screens this is a no-op (content fits naturally).
+          overflowX: 'auto',
+          overflowY: 'hidden',
+          scrollbarWidth: 'thin',
         }}
       >
         {/* OPEN */}

@@ -25,30 +25,26 @@ import { useEffect, useRef, useState } from 'react'
 import { getCurrentSession } from '@/lib/session'
 import { formatPrice, formatChange, formatPct, changeColor } from '@/lib/utils'
 import type { GoldPrice, SessionName } from '@/lib/types'
-import JournalPanel from '@/components/JournalPanel'
 import Tooltip from '@/components/Tooltip'
 
 // Props lifted from app/page.tsx so the live price hook only
 // runs once at the page root (used both for the dynamic browser
-// title and this bar) and the journal-open state is keyboard-
-// driven from the same place. Avoids double-polling and lets
-// the J / ESC shortcuts bypass the JOURNAL button.
-//
-// `isLeftOpen` / `isRightOpen` drive the side-column visibility
-// from the toggle chips that live INSIDE the bar (so the columns
-// can vanish completely as a drawer rather than collapse to a
-// useless 28px strip).
+// title and this bar). `isLeftOpen` / `isRightOpen` drive the
+// side-column visibility from the toggle chips that live INSIDE
+// the bar (the columns can vanish completely as drawers rather
+// than collapse to a 28px strip).
 interface PriceBarProps {
   data: GoldPrice | null
   loading: boolean
   error: string | null
-  isJournalOpen: boolean
-  onJournalToggle: () => void
-  onJournalClose: () => void
   isLeftOpen: boolean
   isRightOpen: boolean
   onLeftToggle: () => void
   onRightToggle: () => void
+  // On mobile the layout flips to vertical stack and drawers
+  // are forced visible — the toggle chips become meaningless.
+  // Hide them when isMobile is true.
+  isMobile?: boolean
 }
 
 function sessionColor(name: SessionName): string {
@@ -79,17 +75,14 @@ export default function PriceBar({
   data,
   loading,
   error,
-  isJournalOpen,
-  onJournalToggle,
-  onJournalClose,
   isLeftOpen,
   isRightOpen,
   onLeftToggle,
   onRightToggle,
+  isMobile = false,
 }: PriceBarProps) {
   const session = getCurrentSession()
 
-  const [hoverJournal, setHoverJournal] = useState(false)
   const [hoverLeft, setHoverLeft] = useState(false)
   const [hoverRight, setHoverRight] = useState(false)
 
@@ -308,17 +301,17 @@ export default function PriceBar({
           </Tooltip>
         </div>
 
-        {/* Panel toggles + JOURNAL — anchored to the right via
-            marginLeft:auto on the FIRST chip, with the rest
-            following at gap:8. Each toggle reads its panel's
-            visibility from a prop and shows it via fg/border
-            contrast: bright + filled bg when the panel is
-            visible, transparent + muted when hidden. Hover
-            adds a brightness step so the chip feels alive. */}
+        {/* Panel toggle chips — anchored to the right via
+            marginLeft:auto. Hidden on mobile because the layout
+            flips to a vertical stack and both panels are
+            forced visible. Each toggle reads its panel's state
+            from a prop and shows it via fg/border contrast:
+            bright + filled bg when visible, transparent + muted
+            when hidden. */}
         <div
           style={{
             marginLeft: 'auto',
-            display: 'flex',
+            display: isMobile ? 'none' : 'flex',
             alignItems: 'center',
             gap: '6px',
           }}
@@ -365,31 +358,6 @@ export default function PriceBar({
             }}
           >COPILOTE</button>
 
-          <button
-            className="terminal-btn"
-            onClick={onJournalToggle}
-            onMouseEnter={() => setHoverJournal(true)}
-            onMouseLeave={() => setHoverJournal(false)}
-            aria-pressed={isJournalOpen}
-            style={{
-              background: isJournalOpen ? '#161616' : 'transparent',
-              border: `1px solid ${
-                isJournalOpen ? '#3a3a3a' : hoverJournal ? '#444444' : '#222222'
-              }`,
-              color: isJournalOpen
-                ? '#f5f5f5'
-                : hoverJournal
-                  ? '#c5c5c5'
-                  : '#888888',
-              fontFamily: 'var(--font-sans)',
-              fontSize: '9px',
-              padding: '4px 10px',
-              cursor: 'pointer',
-              letterSpacing: '0.1em',
-            }}
-          >
-            JOURNAL
-          </button>
         </div>
 
         {/* 10. LIVE indicator */}
@@ -417,7 +385,6 @@ export default function PriceBar({
         </Tooltip>
       </div>
 
-      <JournalPanel isOpen={isJournalOpen} onClose={onJournalClose} />
     </>
   )
 }

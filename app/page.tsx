@@ -1,29 +1,27 @@
 // Dashboard root — pure layout shell + page-level keyboard +
 // title plumbing.
 //
-// Layout zones (top → bottom):
+// Layout (desktop ≥ 1024px, top → bottom):
 //   1. Top bar           PriceBar             48px
-//   2. Signals strip     SignalsPanel         ~78px (global,
-//                                              horizontal, always
-//                                              visible)
-//   3. Middle row        3 cols (flex-1):     fills remaining
-//                          left  280px        NewsFeed (top, scrolls)
-//                                              + CalendarPanel (bottom)
+//   2. Signals strip     SignalsPanel         ~78px
+//   3. Middle row        3 cols flex:1
+//                          left  300px        News + Calendar (drawer)
 //                          chart flex:1       TradingViewChart
-//                          right 320px        AnalysisPanel
-//   4. Shortcut hints    J / R / ESC          20px
+//                          right 320px        Copilot AnalysisPanel (drawer)
+//   4. Shortcut hints    R / analyser         20px
 //   5. Bottom bar        BottomBar            36px
 //
-// Keyboard shortcuts (handled at page level, ignore typing):
-//   J / j   → toggle the journal overlay
-//   ESC     → close the journal overlay
-//   R / r   → trigger a fresh AI analysis (CustomEvent
-//             'triggerAnalysis' that AnalysisPanel listens for)
+// Tablet (768-1023px):
+//   - Side drawer widths shrink to 240/260px.
+//   - Shortcut hints hidden (touch device assumption).
 //
-// Dynamic browser title — useGoldPrice is called HERE so it only
-// polls once for the whole page; PriceBar receives the data as
-// props (no double-polling). The title shows live price + arrow
-// + change % so the trader can see the move from a background tab.
+// Mobile (< 768px):
+//   - Middle row flips to flexDirection:column with overflow-y:auto.
+//   - Drawers always-on, full-width, stacked above/below the chart.
+//   - Drawer-toggle buttons in PriceBar hidden.
+//   - Chart pinned to a fixed 320px height.
+//   - Shortcut hints hidden.
+//   - SignalsPanel + BottomBar wrap their chips instead of clipping.
 
 'use client'
 
@@ -36,30 +34,40 @@ import CalendarPanel from '@/components/CalendarPanel'
 import NewsFeed from '@/components/NewsFeed'
 import BottomBar from '@/components/BottomBar'
 import { useGoldPrice } from '@/lib/hooks/useGoldPrice'
+import { useBreakpoint } from '@/lib/hooks/useBreakpoint'
 import { formatPrice } from '@/lib/utils'
 
 export default function Page() {
-  // Single useGoldPrice instance for the whole page — feeds both
-  // the browser-tab title (here) and the PriceBar (passed as props).
   const goldPrice = useGoldPrice()
+  const bp = useBreakpoint()
+  const isMobile = bp === 'mobile'
+  const isTablet = bp === 'tablet'
 
-  // Journal overlay state lifted up here so the J / ESC shortcuts
-  // can drive it without prop-drilling through PriceBar's button.
-  const [isJournalOpen, setIsJournalOpen] = useState(false)
-
-  // Side-column drawer state. Each column slides fully out of
-  // view when hidden (width transitions to 0); the chart fills
-  // the freed space via its existing flex:1. Toggle buttons
-  // live in the PriceBar (NEWS / COPILOT chips) so the drawer
-  // can always be reopened from a stable, always-visible spot.
-  // Both panels start visible.
+  // Drawer state. On mobile we ignore these and force both
+  // drawers visible (the layout flips to a vertical stack).
   const [isLeftOpen, setIsLeftOpen] = useState(true)
   const [isRightOpen, setIsRightOpen] = useState(true)
 
-  // Keep the browser-tab title in sync with the live price.
+  const showLeft = isMobile ? true : isLeftOpen
+  const showRight = isMobile ? true : isRightOpen
+
+  // Per-breakpoint side widths.
+  const leftWidth = isMobile
+    ? '100%'
+    : isTablet
+      ? '240px'
+      : '300px'
+  const rightWidth = isMobile
+    ? '100%'
+    : isTablet
+      ? '260px'
+      : '320px'
+
+  // Browser-tab title — live price + arrow + percent for
+  // background-tab visibility. French-formatted fallback.
   useEffect(() => {
     if (!goldPrice.data) {
-      document.title = "NUGX — Terminal XAU/USD"
+      document.title = 'NUGX — Terminal XAU/USD'
       return
     }
     const price = formatPrice(goldPrice.data.price)
@@ -69,24 +77,13 @@ export default function Page() {
     document.title = `${arrow} ${price} (${sign}${pct.toFixed(2)}%) — XAU/USD`
   }, [goldPrice.data?.price, goldPrice.data?.changePct, goldPrice.data])
 
-  // Global keyboard shortcuts. Skip when typing in inputs.
+  // Global keyboard shortcut: R triggers analysis.
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       const tag = (e.target as HTMLElement | null)?.tagName ?? ''
       if (tag === 'INPUT' || tag === 'TEXTAREA') return
-
-      switch (e.key) {
-        case 'j':
-        case 'J':
-          setIsJournalOpen((prev) => !prev)
-          break
-        case 'Escape':
-          setIsJournalOpen(false)
-          break
-        case 'r':
-        case 'R':
-          window.dispatchEvent(new CustomEvent('triggerAnalysis'))
-          break
+      if (e.key === 'r' || e.key === 'R') {
+        window.dispatchEvent(new CustomEvent('triggerAnalysis'))
       }
     }
     window.addEventListener('keydown', handleKeyDown)
@@ -98,7 +95,9 @@ export default function Page() {
       style={{
         height: '100vh',
         width: '100vw',
-        overflow: 'hidden',
+        // On mobile the page itself is the scroll container; on
+        // desktop/tablet we clip and let inner panels scroll.
+        overflow: isMobile ? 'hidden' : 'hidden',
         display: 'flex',
         flexDirection: 'column',
         background: '#0a0a0a',
@@ -117,50 +116,51 @@ export default function Page() {
           data={goldPrice.data}
           loading={goldPrice.loading}
           error={goldPrice.error}
-          isJournalOpen={isJournalOpen}
-          onJournalToggle={() => setIsJournalOpen((prev) => !prev)}
-          onJournalClose={() => setIsJournalOpen(false)}
           isLeftOpen={isLeftOpen}
           isRightOpen={isRightOpen}
           onLeftToggle={() => setIsLeftOpen((prev) => !prev)}
           onRightToggle={() => setIsRightOpen((prev) => !prev)}
+          isMobile={isMobile}
         />
       </div>
 
-      {/* 2. Global signals strip — sits below PriceBar, always
-            visible, full viewport width. The component owns its
-            own ~78px height (2 rows of compact chips). */}
+      {/* 2. Signals strip — flow-aware, wraps chips on narrow
+            viewports instead of overflowing horizontally. */}
       <SignalsPanel />
 
-      {/* 3. Middle row — 3 columns: left News+Calendar, center
-            chart, right Analysis. */}
+      {/* 3. Middle row — 3 cols on desktop/tablet, single column
+            stack on mobile. */}
       <div
         style={{
           flex: 1,
           display: 'flex',
-          overflow: 'hidden',
+          flexDirection: isMobile ? 'column' : 'row',
+          overflow: isMobile ? 'auto' : 'hidden',
         }}
       >
-        {/* Left drawer — NewsFeed + CalendarPanel. Slides
-            entirely out of view when isLeftOpen is false: width
-            animates to 0, content unmounts on close so the
-            scroll position resets cleanly on reopen. The chart
-            fills the freed space via its own flex:1. */}
+        {/* Left drawer */}
         <div
           style={{
-            width: isLeftOpen ? '300px' : '0px',
-            minWidth: isLeftOpen ? '300px' : '0px',
-            transition: 'width 0.25s ease, min-width 0.25s ease',
+            width: showLeft ? leftWidth : '0px',
+            minWidth: showLeft ? leftWidth : '0px',
+            transition: isMobile
+              ? 'none'
+              : 'width 0.25s ease, min-width 0.25s ease',
             display: 'flex',
             flexDirection: 'column',
             gap: '2px',
-            padding: isLeftOpen ? '2px' : 0,
+            padding: showLeft ? '2px' : 0,
             background: '#0a0a0a',
-            borderRight: isLeftOpen ? '1px solid #222222' : 'none',
+            borderRight: !isMobile && showLeft ? '1px solid #222222' : 'none',
+            borderBottom: isMobile && showLeft ? '1px solid #222222' : 'none',
             overflow: 'hidden',
+            // On mobile the drawer becomes a stack item with a
+            // bounded height so the chart still fits below.
+            maxHeight: isMobile ? '50vh' : 'none',
+            flexShrink: 0,
           }}
         >
-          {isLeftOpen && (
+          {showLeft && (
             <>
               <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
                 <NewsFeed />
@@ -172,84 +172,96 @@ export default function Page() {
           )}
         </div>
 
-        {/* Center column — chart fills remaining width. With
-            both drawers closed it spans the full middle row. */}
-        <div style={{ flex: 1, overflow: 'hidden' }}>
+        {/* Center — chart fills remaining width on desktop/tablet,
+            fixed 320px height on mobile. */}
+        <div
+          style={{
+            flex: isMobile ? 'none' : 1,
+            height: isMobile ? '320px' : 'auto',
+            minHeight: isMobile ? '320px' : 0,
+            overflow: 'hidden',
+          }}
+        >
           <TradingViewChart />
         </div>
 
-        {/* Right drawer — AnalysisPanel. Same drawer pattern as
-            the left side, mirrored. */}
+        {/* Right drawer */}
         <div
           data-right-column
           style={{
-            width: isRightOpen ? '320px' : '0px',
-            minWidth: isRightOpen ? '320px' : '0px',
-            transition: 'width 0.25s ease, min-width 0.25s ease',
+            width: showRight ? rightWidth : '0px',
+            minWidth: showRight ? rightWidth : '0px',
+            transition: isMobile
+              ? 'none'
+              : 'width 0.25s ease, min-width 0.25s ease',
             display: 'flex',
             flexDirection: 'column',
             gap: '2px',
-            padding: isRightOpen ? '2px' : 0,
+            padding: showRight ? '2px' : 0,
             background: '#0a0a0a',
-            borderLeft: isRightOpen ? '1px solid #222222' : 'none',
-            overflowY: isRightOpen ? 'auto' : 'hidden',
+            borderLeft: !isMobile && showRight ? '1px solid #222222' : 'none',
+            borderTop: isMobile && showRight ? '1px solid #222222' : 'none',
+            overflowY: showRight ? 'auto' : 'hidden',
+            // Mobile: cap the panel so it doesn't dominate the
+            // scroll, but allow internal scroll for the longer
+            // Copilot card.
+            maxHeight: isMobile ? '70vh' : 'none',
+            flexShrink: 0,
           }}
         >
-          {isRightOpen && <AnalysisPanel />}
+          {showRight && <AnalysisPanel />}
         </div>
       </div>
 
-      {/* 4. Shortcut hint strip — 20px. */}
-      <div
-        style={{
-          height: '20px',
-          minHeight: '20px',
-          background: '#0a0a0a',
-          borderTop: '1px solid #161616',
-          display: 'flex',
-          alignItems: 'center',
-          padding: '0 16px',
-          gap: '20px',
-        }}
-      >
-        {[
-          ['J', 'journal'],
-          ['R', 'analyser'],
-          ['ESC', 'fermer'],
-        ].map(([key, label]) => (
-          <div
-            key={key}
-            style={{
-              display: 'flex',
-              gap: '6px',
-              alignItems: 'center',
-            }}
-          >
-            <span
+      {/* 4. Shortcut hint strip — hidden on mobile + tablet. */}
+      {!isMobile && !isTablet && (
+        <div
+          style={{
+            height: '20px',
+            minHeight: '20px',
+            background: '#0a0a0a',
+            borderTop: '1px solid #161616',
+            display: 'flex',
+            alignItems: 'center',
+            padding: '0 16px',
+            gap: '20px',
+          }}
+        >
+          {[['R', 'analyser']].map(([key, label]) => (
+            <div
+              key={key}
               style={{
-                background: '#161616',
-                border: '1px solid #222222',
-                color: '#888888',
-                fontSize: '8px',
-                padding: '1px 5px',
-                letterSpacing: '0.05em',
+                display: 'flex',
+                gap: '6px',
+                alignItems: 'center',
               }}
             >
-              {key}
-            </span>
-            <span
-              style={{
-                color: '#666666',
-                fontSize: '8px',
-                letterSpacing: '0.08em',
-                textTransform: 'uppercase',
-              }}
-            >
-              {label}
-            </span>
-          </div>
-        ))}
-      </div>
+              <span
+                style={{
+                  background: '#161616',
+                  border: '1px solid #222222',
+                  color: '#888888',
+                  fontSize: '8px',
+                  padding: '1px 5px',
+                  letterSpacing: '0.05em',
+                }}
+              >
+                {key}
+              </span>
+              <span
+                style={{
+                  color: '#666666',
+                  fontSize: '8px',
+                  letterSpacing: '0.08em',
+                  textTransform: 'uppercase',
+                }}
+              >
+                {label}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* 5. Bottom bar — fixed 36px. */}
       <div
