@@ -119,9 +119,7 @@ export default function CalendarPanel() {
           color: '#666666',
           fontSize: '10px',
         }}
-      >
-        CALENDAR UNAVAILABLE
-      </div>
+      >CALENDRIER INDISPONIBLE</div>
     )
   } else if (events.length === 0) {
     body = (
@@ -260,21 +258,17 @@ export default function CalendarPanel() {
               textTransform: 'uppercase',
               letterSpacing: '0.12em',
             }}
-          >
-            CALENDAR
-          </span>
+          >CALENDRIER</span>
         </Tooltip>
         {/* Trade-gate indicator. Pulses on BLOCKED so the
             trader catches it from peripheral vision. */}
         {clearToTrade ? (
-          <span style={{ color: '#4ade80', fontSize: '9px' }}>● CLEAR</span>
+          <span style={{ color: '#4ade80', fontSize: '9px' }}>● DÉGAGÉ</span>
         ) : (
           <span
             className="pulse"
             style={{ color: '#f87171', fontSize: '9px' }}
-          >
-            ● BLOCKED
-          </span>
+          >● BLOQUÉ</span>
         )}
       </div>
 

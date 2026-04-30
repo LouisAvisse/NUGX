@@ -181,9 +181,7 @@ export default function PriceBar({
             position="bottom"
             content="Spot price = current market price for immediate delivery. Different from futures which settle at a later date. This is the real-time trading price."
           >
-            <span style={{ color: '#666666', fontSize: '8px' }}>
-              GOLD SPOT
-            </span>
+            <span style={{ color: '#666666', fontSize: '8px' }}>OR SPOT</span>
           </Tooltip>
         </div>
 
@@ -344,9 +342,7 @@ export default function PriceBar({
               cursor: 'pointer',
               letterSpacing: '0.1em',
             }}
-          >
-            NEWS
-          </button>
+          >ACTUS</button>
 
           <button
             className="terminal-btn"
@@ -367,9 +363,7 @@ export default function PriceBar({
               cursor: 'pointer',
               letterSpacing: '0.1em',
             }}
-          >
-            COPILOT
-          </button>
+          >COPILOTE</button>
 
           <button
             className="terminal-btn"
@@ -418,9 +412,7 @@ export default function PriceBar({
                 fontSize: '9px',
                 letterSpacing: '0.1em',
               }}
-            >
-              LIVE
-            </span>
+            >DIRECT</span>
           </span>
         </Tooltip>
       </div>

@@ -292,7 +292,7 @@ export default function SignalsPanel() {
             position="bottom"
             content="Expected volume for current session. HIGH during NY/London overlap (12-16 UTC) when both markets are active."
           >
-            <span style={chipLabelStyle}>SESSION VOL</span>
+            <span style={chipLabelStyle}>VOL SESSION</span>
           </Tooltip>
           <span
             style={{
@@ -314,7 +314,7 @@ export default function SignalsPanel() {
           gap: '20px',
         }}
       >
-        <span style={sectionLabelStyle}>TECHNICAL</span>
+        <span style={sectionLabelStyle}>TECHNIQUE</span>
 
         {/* RSI 14 */}
         <div style={chipStyle}>
@@ -404,7 +404,7 @@ export default function SignalsPanel() {
             position="bottom"
             content="Overall 1H trend from EMA20 vs EMA50 alignment + price position. UPTREND: price + EMA20 above EMA50. DOWNTREND: mirror. RANGING: mixed. Trade WITH the trend."
           >
-            <span style={chipLabelStyle}>TREND</span>
+            <span style={chipLabelStyle}>TENDANCE</span>
           </Tooltip>
           {showTechSkeleton ? (
             <Shim width="70px" height={11} />
@@ -504,7 +504,7 @@ export default function SignalsPanel() {
             position="bottom"
             content="Bollinger Bands (20, 2σ). Above upper = overextended. Below lower = oversold. Inside = normal range. Squeeze = volatility breakout coming."
           >
-            <span style={chipLabelStyle}>BB BAND</span>
+            <span style={chipLabelStyle}>BB</span>
           </Tooltip>
           {showTechSkeleton ? (
             <Shim width="70px" height={11} />
@@ -548,7 +548,7 @@ export default function SignalsPanel() {
             position="bottom"
             content="Where current price sits within today's high-low range. 0% = at low, 100% = at high. >70% extended (risky for new longs). <30% = room to run."
           >
-            <span style={chipLabelStyle}>DAY RANGE</span>
+            <span style={chipLabelStyle}>AMPLITUDE</span>
           </Tooltip>
           {showTechSkeleton ? (
             <Shim width="60px" height={11} />
@@ -599,7 +599,7 @@ export default function SignalsPanel() {
             alignItems: 'flex-end',
           }}
         >
-          <span style={chipLabelStyle}>STATUS</span>
+          <span style={chipLabelStyle}>STATUT</span>
           <span style={{ color: '#666666', fontSize: '9px' }}>{upd}</span>
         </div>
       </div>

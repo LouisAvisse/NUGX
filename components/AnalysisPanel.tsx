@@ -443,9 +443,7 @@ export default function AnalysisPanel() {
   let countdownNode: React.ReactNode
   if (loading) {
     countdownNode = (
-      <span className="pulse" style={{ color: '#fbbf24', fontSize: '9px' }}>
-        ANALYZING...
-      </span>
+      <span className="pulse" style={{ color: '#fbbf24', fontSize: '9px' }}>ANALYSE...</span>
     )
   } else if (data) {
     countdownNode = (
@@ -514,9 +512,7 @@ export default function AnalysisPanel() {
               textTransform: 'uppercase',
               letterSpacing: '0.12em',
             }}
-          >
-            COPILOT
-          </span>
+          >COPILOTE</span>
           {mc && (
             <span
               style={{
@@ -614,7 +610,7 @@ export default function AnalysisPanel() {
                 <span style={{ color: confidenceColor(data.confidence) }}>
                   {data.confidence}
                 </span>{' '}
-                CONFIDENCE
+                CONFIANCE
               </span>
             )}
           </div>
@@ -667,7 +663,7 @@ export default function AnalysisPanel() {
           }}
         >
           <ParamCell
-            label="ENTRY"
+            label="ENTRÉE"
             value={showError ? undefined : data?.entry}
             color="#60a5fa"
             loading={showSkeleton}
@@ -679,7 +675,7 @@ export default function AnalysisPanel() {
             loading={showSkeleton}
           />
           <ParamCell
-            label="TARGET"
+            label="OBJECTIF"
             value={showError ? undefined : data?.target}
             color="#4ade80"
             loading={showSkeleton}
@@ -716,7 +712,7 @@ export default function AnalysisPanel() {
             )}
           </div>
           <div>
-            <span style={labelStyle}>HOLD</span>{' '}
+            <span style={labelStyle}>DURÉE</span>{' '}
             {showSkeleton ? (
               <span style={{ display: 'inline-block', verticalAlign: 'middle' }}>
                 <Skeleton width={50} height={11} />
@@ -781,9 +777,7 @@ export default function AnalysisPanel() {
               textTransform: 'uppercase',
               letterSpacing: '0.12em',
             }}
-          >
-            CONFLUENCE
-          </span>
+          >CONFLUENCE</span>
           {showSkeleton ? (
             <Skeleton width={40} height={12} />
           ) : data && !showError ? (
@@ -863,20 +857,16 @@ export default function AnalysisPanel() {
           </div>
         ) : showError ? (
           <>
-            <div style={{ color: '#f87171', fontSize: '10px' }}>
-              ANALYSIS FAILED
-            </div>
+            <div style={{ color: '#f87171', fontSize: '10px' }}>ÉCHEC ANALYSE</div>
             <div
               style={{ color: '#888888', fontSize: '9px', marginTop: '4px' }}
-            >
-              Check API key and retry.
-            </div>
+            >Vérifier la clé API et réessayer.</div>
           </>
         ) : data && cat ? (
           <>
             {/* NOW */}
             <div style={{ marginBottom: '4px' }}>
-              <span style={{ ...labelStyle, marginRight: '4px' }}>NOW</span>
+              <span style={{ ...labelStyle, marginRight: '4px' }}>MAINT.</span>
               <span
                 style={{ color: '#999999', fontSize: '9px', lineHeight: 1.5 }}
               >
@@ -891,9 +881,7 @@ export default function AnalysisPanel() {
                   color: '#f87171',
                   marginRight: '4px',
                 }}
-              >
-                RISK
-              </span>
+              >RISQUE</span>
               <span
                 style={{ color: '#999999', fontSize: '9px', lineHeight: 1.5 }}
               >
@@ -909,7 +897,7 @@ export default function AnalysisPanel() {
                   marginRight: '4px',
                 }}
               >
-                TRIGGER
+                DÉCLENCH.
               </span>
               <span
                 style={{
@@ -932,14 +920,12 @@ export default function AnalysisPanel() {
                 fontStyle: 'italic',
               }}
             >
-              <span style={{ ...labelStyle, marginRight: '4px' }}>EXIT</span>
+              <span style={{ ...labelStyle, marginRight: '4px' }}>SORTIE</span>
               {data.exitPlan}
             </div>
           </>
         ) : (
-          <div style={{ color: '#666666', fontSize: '9px' }}>
-            Run analysis to generate trade thesis.
-          </div>
+          <div style={{ color: '#666666', fontSize: '9px' }}>Lancer une analyse pour générer une thèse de trade.</div>
         )}
       </div>
 
@@ -979,12 +965,12 @@ export default function AnalysisPanel() {
         }}
       >
         {loading
-          ? 'ANALYZING...'
+          ? 'ANALYSE EN COURS...'
           : calendarBlocked
-            ? '⚠ CALENDAR BLOCK — ANALYSIS DISABLED'
+            ? '⚠ CALENDRIER BLOQUÉ — ANALYSE DÉSACTIVÉE'
             : showError
-              ? 'RETRY ANALYSIS'
-              : 'RUN ANALYSIS'}
+              ? 'RÉESSAYER'
+              : "LANCER L'ANALYSE"}
       </button>
 
       {/* 8. Footer — last analysis time + technicals last update. */}

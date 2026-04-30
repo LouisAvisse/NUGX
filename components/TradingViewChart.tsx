@@ -95,9 +95,7 @@ export default function TradingViewChart() {
             fontSize: '11px',
             letterSpacing: '0.15em',
           }}
-        >
-          LOADING CHART...
-        </div>
+        >CHARGEMENT GRAPHIQUE...</div>
       </div>
     )
   }

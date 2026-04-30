@@ -59,7 +59,7 @@ export default function Page() {
   // Keep the browser-tab title in sync with the live price.
   useEffect(() => {
     if (!goldPrice.data) {
-      document.title = 'XAU/USD — Gold Terminal'
+      document.title = "NUGX — Terminal XAU/USD"
       return
     }
     const price = formatPrice(goldPrice.data.price)
@@ -214,8 +214,8 @@ export default function Page() {
       >
         {[
           ['J', 'journal'],
-          ['R', 'run analysis'],
-          ['ESC', 'close'],
+          ['R', 'analyser'],
+          ['ESC', 'fermer'],
         ].map(([key, label]) => (
           <div
             key={key}

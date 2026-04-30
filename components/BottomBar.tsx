@@ -104,7 +104,7 @@ export default function BottomBar() {
           <Tooltip
             content="Today's opening price for gold. Compare with current price to gauge intraday direction. Price above open = buyers in control today."
           >
-            <span style={labelStyle}>OPEN</span>
+            <span style={labelStyle}>OUV</span>
           </Tooltip>
           <span
             style={{
@@ -120,7 +120,7 @@ export default function BottomBar() {
         {/* PREV CLOSE */}
         <div style={blockStyle}>
           <Tooltip content="Yesterday's closing price. The difference between PREV and current price is today's total move so far.">
-            <span style={labelStyle}>PREV</span>
+            <span style={labelStyle}>PRÉC</span>
           </Tooltip>
           <span
             style={{
@@ -137,7 +137,7 @@ export default function BottomBar() {
             colored by direct sign tint via changeColor. */}
         <div style={blockStyle}>
           <Tooltip content="Today's price change in dollars and percentage from yesterday's close. Positive = gold up on the day. Negative = gold down on the day.">
-            <span style={labelStyle}>CHG</span>
+            <span style={labelStyle}>VAR</span>
           </Tooltip>
           <span
             style={{
@@ -183,7 +183,7 @@ export default function BottomBar() {
         {/* 52W H — static placeholder until a real 52-week source lands. */}
         <div style={blockStyle}>
           <Tooltip content="Highest gold price in the past 52 weeks. A major resistance level — if current price approaches this, expect selling pressure and potential reversal.">
-            <span style={labelStyle}>52W H</span>
+            <span style={labelStyle}>52S H</span>
           </Tooltip>
           <span style={{ ...valueStyle, color: '#4ade80' }}>$3,500.00</span>
         </div>
@@ -195,7 +195,7 @@ export default function BottomBar() {
             position="left"
             content="Lowest gold price in the past 52 weeks. A major support level — if current price approaches this, expect buying interest and potential bounce."
           >
-            <span style={labelStyle}>52W L</span>
+            <span style={labelStyle}>52S B</span>
           </Tooltip>
           <span style={{ ...valueStyle, color: '#f87171' }}>$2,287.00</span>
         </div>
@@ -204,7 +204,7 @@ export default function BottomBar() {
         {/* UPDATED + LIVE dot — anchored to the right edge via marginLeft:auto.
             The dot pulses green to mark the dashboard as live. */}
         <div style={{ ...blockStyle, marginLeft: 'auto' }}>
-          <span style={labelStyle}>UPDATED</span>
+          <span style={labelStyle}>MAJ</span>
           <span
             style={{
               ...valueStyle,

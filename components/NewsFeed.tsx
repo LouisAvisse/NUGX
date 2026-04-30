@@ -249,22 +249,22 @@ export default function NewsFeed() {
     body = (
       <CenteredMessage
         glyph="⚠"
-        primary="NEWS FEED UNAVAILABLE"
-        secondary="Retrying in 15 minutes"
+        primary="FLUX INDISPONIBLE"
+        secondary="Nouvelle tentative dans 15 min"
       />
     )
   } else if (articles.length === 0) {
     body = (
       <CenteredMessage
-        primary="NO ARTICLES FOUND"
-        secondary="Check query or API limits"
+        primary="AUCUN ARTICLE"
+        secondary="Vérifier la requête ou les limites API"
       />
     )
   } else if (visibleArticles.length === 0) {
     // Filter excluded everything but we have articles.
     body = (
       <CenteredMessage
-        primary="NO MATCHES"
+        primary="AUCUN RÉSULTAT"
         secondary={`Filter "${filter}" excludes every article in the current feed`}
       />
     )
@@ -379,24 +379,22 @@ export default function NewsFeed() {
             textTransform: 'uppercase',
             letterSpacing: '0.12em',
           }}
-        >
-          NEWS
-        </span>
+        >ACTUS</span>
         <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
           <FilterChip
-            label="ALL"
+            label="TOUS"
             value="ALL"
             current={filter}
             onSelect={setFilter}
           />
           <FilterChip
-            label="HIGH"
+            label="HAUT"
             value="HIGH"
             current={filter}
             onSelect={setFilter}
           />
           <FilterChip
-            label="BULL"
+            label="HAUSSE"
             value="BULL"
             current={filter}
             onSelect={setFilter}
@@ -436,7 +434,7 @@ export default function NewsFeed() {
             <span style={{ color: '#4ade80', fontSize: '9px' }}>
               {sentimentCounts.bull}
             </span>
-            <span style={{ color: '#666666', fontSize: '8px' }}>BULL</span>
+            <span style={{ color: '#666666', fontSize: '8px' }}>HAUSSE</span>
           </div>
           {/* Bearish count */}
           <div
@@ -446,7 +444,7 @@ export default function NewsFeed() {
             <span style={{ color: '#f87171', fontSize: '9px' }}>
               {sentimentCounts.bear}
             </span>
-            <span style={{ color: '#666666', fontSize: '8px' }}>BEAR</span>
+            <span style={{ color: '#666666', fontSize: '8px' }}>BAISSE</span>
           </div>
           {/* Neutral count */}
           <div
@@ -456,7 +454,7 @@ export default function NewsFeed() {
             <span style={{ color: '#b0b0b0', fontSize: '9px' }}>
               {sentimentCounts.neut}
             </span>
-            <span style={{ color: '#666666', fontSize: '8px' }}>NEUT</span>
+            <span style={{ color: '#666666', fontSize: '8px' }}>NEUTRE</span>
           </div>
         </div>
         <span
@@ -538,7 +536,7 @@ export default function NewsFeed() {
         }}
       >
         <span style={{ color: '#666666', fontSize: '9px' }}>{footerLabel}</span>
-        <span style={{ color: '#666666', fontSize: '9px' }}>REFRESH 15m</span>
+        <span style={{ color: '#666666', fontSize: '9px' }}>MAJ 15min</span>
       </div>
     </div>
   )

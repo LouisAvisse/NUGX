@@ -154,7 +154,7 @@ function EntryCard({
         }}
       >
         <div>
-          <div style={labelStyle}>ENTRY</div>
+          <div style={labelStyle}>ENTRÉE</div>
           <div style={{ color: '#e5e5e5', fontSize: '10px' }}>
             {formatPrice(entry.entry)}
           </div>
@@ -166,7 +166,7 @@ function EntryCard({
           </div>
         </div>
         <div>
-          <div style={labelStyle}>TARGET</div>
+          <div style={labelStyle}>OBJECTIF</div>
           <div style={{ color: '#e5e5e5', fontSize: '10px' }}>
             {formatPrice(entry.target)}
           </div>
@@ -182,7 +182,7 @@ function EntryCard({
             justifyContent: 'space-between',
           }}
         >
-          <span style={labelStyle}>CLOSED</span>
+          <span style={labelStyle}>FERMÉ</span>
           {(() => {
             const pnl = calculatePnL(
               entry.entry,
@@ -226,9 +226,7 @@ function EntryCard({
               onClose(entry.id, n)
             }}
             style={{ ...buttonStyle, width: 'auto', padding: '4px 8px' }}
-          >
-            CLOSE
-          </button>
+          >FERMER</button>
         </div>
       )}
 
@@ -265,9 +263,7 @@ function EntryCard({
           cursor: 'pointer',
           letterSpacing: '0.05em',
         }}
-      >
-        DELETE
-      </button>
+      >SUPPRIMER</button>
     </div>
   )
 }
@@ -353,9 +349,7 @@ export default function JournalPanel({ isOpen, onClose }: JournalPanelProps) {
               textTransform: 'uppercase',
               letterSpacing: '0.12em',
             }}
-          >
-            TRADE JOURNAL
-          </span>
+          >JOURNAL DE TRADING</span>
           <button
             className="terminal-btn"
             onClick={onClose}
@@ -392,9 +386,7 @@ export default function JournalPanel({ isOpen, onClose }: JournalPanelProps) {
               letterSpacing: '0.12em',
               marginBottom: '4px',
             }}
-          >
-            LOG TRADE
-          </div>
+          >NOUVEAU TRADE</div>
 
           {/* Direction toggle. */}
           <div style={{ display: 'flex', gap: '6px' }}>
@@ -419,7 +411,7 @@ export default function JournalPanel({ isOpen, onClose }: JournalPanelProps) {
             }}
           >
             <div>
-              <div style={labelStyle}>ENTRY</div>
+              <div style={labelStyle}>ENTRÉE</div>
               <input
                 type="number"
                 step="0.01"
@@ -439,7 +431,7 @@ export default function JournalPanel({ isOpen, onClose }: JournalPanelProps) {
               />
             </div>
             <div>
-              <div style={labelStyle}>TARGET</div>
+              <div style={labelStyle}>OBJECTIF</div>
               <input
                 type="number"
                 step="0.01"
@@ -474,9 +466,7 @@ export default function JournalPanel({ isOpen, onClose }: JournalPanelProps) {
               e.currentTarget.style.borderColor = '#2a2a2a'
               e.currentTarget.style.color = '#999999'
             }}
-          >
-            LOG TRADE +
-          </button>
+          >ENREGISTRER +</button>
         </div>
 
         {/* C. Entries list — flex:1, scrolls internally. */}
