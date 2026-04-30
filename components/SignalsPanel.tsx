@@ -187,25 +187,29 @@ export default function SignalsPanel() {
 
   return (
     <div
+      data-section="signals-strip"
       style={{
         background: '#111111',
         borderTop: '1px solid #222222',
         borderBottom: '1px solid #222222',
-        // Vertical breathing room without doubling the strip
-        // height — single row is naturally shorter than the old
-        // two-row layout.
         padding: '10px 20px',
-        // Single horizontal row. flexWrap so narrow viewports
-        // reflow gracefully instead of clipping; gap controls
-        // both the wrap row-gap and the chip column-gap.
+        // Single horizontal row, NEVER wraps. On viewports too
+        // narrow to fit all chips, the strip scrolls horizontally
+        // — feels native on touch (iOS / Android / iPad) thanks
+        // to -webkit-overflow-scrolling:touch, and never collapses
+        // to multiple stacked rows that would lose the
+        // glance-able-at-a-time property of a status bar.
         display: 'flex',
         flexDirection: 'row',
         alignItems: 'center',
-        flexWrap: 'wrap',
-        gap: '12px 18px',
-        // Optional error banners — kept tiny in their own line
-        // when present (rare path). Achieved via flex-basis 100%
-        // on the banner element when rendered.
+        flexWrap: 'nowrap',
+        gap: '18px',
+        overflowX: 'auto',
+        overflowY: 'hidden',
+        WebkitOverflowScrolling: 'touch',
+        // Slim scrollbar so the strip's vertical real estate
+        // doesn't change when the bar appears/disappears.
+        scrollbarWidth: 'thin',
       }}
     >
       {/* Optional error banner — kept tiny and pushed to its own

@@ -41,10 +41,10 @@ interface PriceBarProps {
   isRightOpen: boolean
   onLeftToggle: () => void
   onRightToggle: () => void
-  // On mobile the layout flips to vertical stack and drawers
-  // are forced visible — the toggle chips become meaningless.
-  // Hide them when isMobile is true.
-  isMobile?: boolean
+  // On any stacked layout (mobile + tablet) the drawers are
+  // force-open and the toggle chips become meaningless. Hide
+  // them when isStacked is true.
+  isStacked?: boolean
 }
 
 function sessionColor(name: SessionName): string {
@@ -79,7 +79,7 @@ export default function PriceBar({
   isRightOpen,
   onLeftToggle,
   onRightToggle,
-  isMobile = false,
+  isStacked = false,
 }: PriceBarProps) {
   const session = getCurrentSession()
 
@@ -311,7 +311,7 @@ export default function PriceBar({
         <div
           style={{
             marginLeft: 'auto',
-            display: isMobile ? 'none' : 'flex',
+            display: isStacked ? 'none' : 'flex',
             alignItems: 'center',
             gap: '6px',
           }}

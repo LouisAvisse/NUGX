@@ -3,7 +3,7 @@
 //
 // Layout (desktop ≥ 1024px, top → bottom):
 //   1. Top bar           PriceBar             48px
-//   2. Signals strip     SignalsPanel         ~78px
+//   2. Signals strip     SignalsPanel         ~58px (horizontal scroll)
 //   3. Middle row        3 cols flex:1
 //                          left  300px        News + Calendar (drawer)
 //                          chart flex:1       TradingViewChart
@@ -11,17 +11,20 @@
 //   4. Shortcut hints    R / analyser         20px
 //   5. Bottom bar        BottomBar            36px
 //
-// Tablet (768-1023px):
-//   - Side drawer widths shrink to 240/260px.
-//   - Shortcut hints hidden (touch device assumption).
+// Stacked layout (mobile + tablet, < 1024px):
+//   The middle row flips to a vertical column with overflow-y:auto.
+//   Children re-order via CSS `order` to match the touch-trader's
+//   priority: chart first, then Copilot recommendations, then
+//   the news+calendar context.
 //
-// Mobile (< 768px):
-//   - Middle row flips to flexDirection:column with overflow-y:auto.
-//   - Drawers always-on, full-width, stacked above/below the chart.
-//   - Drawer-toggle buttons in PriceBar hidden.
-//   - Chart pinned to a fixed 320px height.
-//   - Shortcut hints hidden.
-//   - SignalsPanel + BottomBar wrap their chips instead of clipping.
+//     1. Chart                  (order: 1)
+//     2. Copilot AnalysisPanel  (order: 2)
+//     3. News + Calendar drawer (order: 3)
+//
+//   Both drawers force-open in stacked mode (the toggle chips in
+//   PriceBar hide). Per-breakpoint chart height keeps the chart
+//   prominent on phones (~280px) and even more so on iPads
+//   (~420px) without dominating the scroll.
 
 'use client'
 
@@ -42,29 +45,40 @@ export default function Page() {
   const bp = useBreakpoint()
   const isMobile = bp === 'mobile'
   const isTablet = bp === 'tablet'
+  // Anything not desktop uses the stacked layout. iPad portrait
+  // (~768-820px) and even iPad landscape near the breakpoint
+  // benefit from a vertical scroll over a cramped 3-column grid.
+  const isStacked = bp !== 'desktop'
 
-  // Drawer state. On mobile we ignore these and force both
-  // drawers visible (the layout flips to a vertical stack).
+  // Drawer state. On stacked layouts both drawers are forced
+  // visible (the order property does the rearranging).
   const [isLeftOpen, setIsLeftOpen] = useState(true)
   const [isRightOpen, setIsRightOpen] = useState(true)
 
-  const showLeft = isMobile ? true : isLeftOpen
-  const showRight = isMobile ? true : isRightOpen
+  const showLeft = isStacked ? true : isLeftOpen
+  const showRight = isStacked ? true : isRightOpen
 
-  // Per-breakpoint side widths.
-  const leftWidth = isMobile
+  // Side widths only matter when not stacked. Stack mode uses
+  // 100% per panel.
+  const leftWidth = isStacked
     ? '100%'
     : isTablet
       ? '240px'
       : '300px'
-  const rightWidth = isMobile
+  const rightWidth = isStacked
     ? '100%'
     : isTablet
       ? '260px'
       : '320px'
 
+  // Per-breakpoint chart height when stacked. Phones get a
+  // tighter chart so the Copilot card is reachable in one
+  // thumb-scroll; iPads get a generous one because the chart
+  // is the primary surface for technical reads.
+  const chartHeight = isMobile ? '280px' : isTablet ? '420px' : 'auto'
+
   // Browser-tab title — live price + arrow + percent for
-  // background-tab visibility. French-formatted fallback.
+  // background-tab visibility.
   useEffect(() => {
     if (!goldPrice.data) {
       document.title = 'NUGX — Terminal XAU/USD'
@@ -92,12 +106,11 @@ export default function Page() {
 
   return (
     <main
+      data-section="page-root"
       style={{
         height: '100vh',
         width: '100vw',
-        // On mobile the page itself is the scroll container; on
-        // desktop/tablet we clip and let inner panels scroll.
-        overflow: isMobile ? 'hidden' : 'hidden',
+        overflow: 'hidden',
         display: 'flex',
         flexDirection: 'column',
         background: '#0a0a0a',
@@ -105,6 +118,7 @@ export default function Page() {
     >
       {/* 1. Top bar — fixed 48px. */}
       <div
+        data-section="topbar-wrapper"
         style={{
           height: '48px',
           minHeight: '48px',
@@ -120,30 +134,33 @@ export default function Page() {
           isRightOpen={isRightOpen}
           onLeftToggle={() => setIsLeftOpen((prev) => !prev)}
           onRightToggle={() => setIsRightOpen((prev) => !prev)}
-          isMobile={isMobile}
+          isStacked={isStacked}
         />
       </div>
 
-      {/* 2. Signals strip — flow-aware, wraps chips on narrow
-            viewports instead of overflowing horizontally. */}
+      {/* 2. Signals strip — always horizontal, scrolls when narrow. */}
       <SignalsPanel />
 
-      {/* 3. Middle row — 3 cols on desktop/tablet, single column
-            stack on mobile. */}
+      {/* 3. Middle row — 3 cols on desktop, vertical stack
+            (chart → copilot → news+calendar) on mobile + tablet. */}
       <div
+        data-section="middle-row"
         style={{
           flex: 1,
           display: 'flex',
-          flexDirection: isMobile ? 'column' : 'row',
-          overflow: isMobile ? 'auto' : 'hidden',
+          flexDirection: isStacked ? 'column' : 'row',
+          overflow: isStacked ? 'auto' : 'hidden',
         }}
       >
-        {/* Left drawer */}
+        {/* LEFT drawer — News + Calendar.
+            Source order keeps it first to match the desktop
+            layout; CSS `order` pushes it to LAST when stacked. */}
         <div
+          data-section="left-drawer"
           style={{
             width: showLeft ? leftWidth : '0px',
             minWidth: showLeft ? leftWidth : '0px',
-            transition: isMobile
+            transition: isStacked
               ? 'none'
               : 'width 0.25s ease, min-width 0.25s ease',
             display: 'flex',
@@ -151,18 +168,28 @@ export default function Page() {
             gap: '2px',
             padding: showLeft ? '2px' : 0,
             background: '#0a0a0a',
-            borderRight: !isMobile && showLeft ? '1px solid #222222' : 'none',
-            borderBottom: isMobile && showLeft ? '1px solid #222222' : 'none',
+            borderRight: !isStacked && showLeft ? '1px solid #222222' : 'none',
+            borderTop: isStacked && showLeft ? '1px solid #222222' : 'none',
             overflow: 'hidden',
-            // On mobile the drawer becomes a stack item with a
-            // bounded height so the chart still fits below.
-            maxHeight: isMobile ? '50vh' : 'none',
+            // On stacked layouts let the drawer take its natural
+            // height (NewsFeed scrolls internally on its own).
+            // The page-level overflow handles vertical scroll.
             flexShrink: 0,
+            order: isStacked ? 3 : 0,
           }}
         >
           {showLeft && (
             <>
-              <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
+              <div
+                style={{
+                  flex: 1,
+                  // On stack mode, NewsFeed takes a bounded
+                  // height so the calendar below it is always
+                  // visible without scrolling THROUGH it.
+                  minHeight: isStacked ? '320px' : 0,
+                  overflow: 'hidden',
+                }}
+              >
                 <NewsFeed />
               </div>
               <div style={{ flexShrink: 0 }}>
@@ -172,26 +199,28 @@ export default function Page() {
           )}
         </div>
 
-        {/* Center — chart fills remaining width on desktop/tablet,
-            fixed 320px height on mobile. */}
+        {/* CENTER — chart. flex:1 on desktop, fixed height on stack. */}
         <div
+          data-section="chart"
           style={{
-            flex: isMobile ? 'none' : 1,
-            height: isMobile ? '320px' : 'auto',
-            minHeight: isMobile ? '320px' : 0,
+            flex: isStacked ? 'none' : 1,
+            height: chartHeight,
+            minHeight: isStacked ? chartHeight : 0,
             overflow: 'hidden',
+            order: isStacked ? 1 : 0,
           }}
         >
           <TradingViewChart />
         </div>
 
-        {/* Right drawer */}
+        {/* RIGHT drawer — Copilot AnalysisPanel. */}
         <div
+          data-section="right-drawer"
           data-right-column
           style={{
             width: showRight ? rightWidth : '0px',
             minWidth: showRight ? rightWidth : '0px',
-            transition: isMobile
+            transition: isStacked
               ? 'none'
               : 'width 0.25s ease, min-width 0.25s ease',
             display: 'flex',
@@ -199,23 +228,22 @@ export default function Page() {
             gap: '2px',
             padding: showRight ? '2px' : 0,
             background: '#0a0a0a',
-            borderLeft: !isMobile && showRight ? '1px solid #222222' : 'none',
-            borderTop: isMobile && showRight ? '1px solid #222222' : 'none',
-            overflowY: showRight ? 'auto' : 'hidden',
-            // Mobile: cap the panel so it doesn't dominate the
-            // scroll, but allow internal scroll for the longer
-            // Copilot card.
-            maxHeight: isMobile ? '70vh' : 'none',
+            borderLeft: !isStacked && showRight ? '1px solid #222222' : 'none',
+            borderTop: isStacked && showRight ? '1px solid #222222' : 'none',
+            overflowY: showRight && !isStacked ? 'auto' : 'visible',
             flexShrink: 0,
+            order: isStacked ? 2 : 0,
           }}
         >
           {showRight && <AnalysisPanel />}
         </div>
       </div>
 
-      {/* 4. Shortcut hint strip — hidden on mobile + tablet. */}
-      {!isMobile && !isTablet && (
+      {/* 4. Shortcut hint strip — desktop only.
+            Tablets / phones are touch-first, no keyboard. */}
+      {!isStacked && (
         <div
+          data-section="shortcut-hints"
           style={{
             height: '20px',
             minHeight: '20px',
@@ -265,6 +293,7 @@ export default function Page() {
 
       {/* 5. Bottom bar — fixed 36px. */}
       <div
+        data-section="bottombar-wrapper"
         style={{
           height: '36px',
           minHeight: '36px',
