@@ -219,3 +219,4 @@ Everything else: MEDIUM
 - [#28] Technicals stack — lib/technicals.ts compute fn, /api/technicals via yahoo-finance2 GC=F 1H candles + technicalindicators package, useTechnicals hook 60s polling
 - [#29] Calendar stack — /api/calendar via ForexFactory weekly JSON, gold-relevant filter, 45-min trade gate, useCalendar hook 60s polling
 - [#30] News sentiment tagging — bullish/bearish gold keyword lists; sentiment field populated alongside impact in /api/news
+- [#31] AnalysisPanel.buildRequest wired to useTechnicals + useCalendar — analyze body now carries real indicator + calendar values

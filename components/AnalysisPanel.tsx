@@ -20,6 +20,8 @@ import { useAnalysis } from '@/lib/hooks/useAnalysis'
 import { useGoldPrice } from '@/lib/hooks/useGoldPrice'
 import { useSignals } from '@/lib/hooks/useSignals'
 import { useNews } from '@/lib/hooks/useNews'
+import { useTechnicals } from '@/lib/hooks/useTechnicals'
+import { useCalendar } from '@/lib/hooks/useCalendar'
 import { biasColor, formatDateTime } from '@/lib/utils'
 import { getCurrentSession } from '@/lib/session'
 import type {
@@ -117,6 +119,8 @@ export default function AnalysisPanel() {
   const goldPrice = useGoldPrice()
   const signals = useSignals()
   const news = useNews()
+  const technicals = useTechnicals()
+  const calendar = useCalendar()
   const { data, loading, error, secondsUntilNext, trigger } = analysis
 
   const [hoverBtn, setHoverBtn] = useState(false)
@@ -132,12 +136,12 @@ export default function AnalysisPanel() {
   }, [data?.generatedAt])
 
   // Build the analyze payload from current upstream state.
-  // The technicals and calendar fields are stubbed with safe
-  // defaults until useTechnicals + useCalendar exist (steps B-D
-  // of the resume plan in the [#26] close-out report). Once
-  // those hooks ship, replace the stubs with the real values.
-  // News sentiment counts derive from articles[].sentiment when
-  // present; missing sentiment falls into NEUTRAL.
+  // Reads from all six hooks; every numeric default mirrors the
+  // FALLBACK pattern in /api/technicals so a missing upstream
+  // never propagates `undefined` into the request body. News
+  // sentiment counts derive from articles[].sentiment when the
+  // /api/news payload includes it (#30); a missing sentiment
+  // is folded into NEUTRAL via arithmetic so counts always sum.
   const buildRequest = useCallback((): AnalysisRequest => {
     const session = getCurrentSession()
     const articles = news.articles
@@ -147,9 +151,9 @@ export default function AnalysisPanel() {
     const newsBearishCount = articles.filter(
       (a) => a.sentiment === 'BEARISH'
     ).length
-    // Treat missing sentiment as NEUTRAL so the counts always sum
-    // to articles.length.
     const newsNeutralCount = articles.length - newsBullishCount - newsBearishCount
+
+    const ind = technicals.indicators
 
     return {
       // Price
@@ -159,29 +163,28 @@ export default function AnalysisPanel() {
       low: goldPrice.data?.low ?? 0,
       open: goldPrice.data?.open ?? 0,
 
-      // Technical indicators — stubbed until useTechnicals exists.
-      // 50 for RSI is the neutral midpoint; 0/'NONE'/'NEUTRAL' for
-      // the rest. The Claude prompt will explicitly note these
-      // signals as "unknown — score NEUTRAL" while the hook ships.
-      ema20: 0,
-      ema50: 0,
-      ema200: 0,
-      rsi: 50,
-      macd: 0,
-      macdSignal: 0,
-      macdHistogram: 0,
-      macdCross: 'NONE',
-      atr: 0,
-      bbUpper: 0,
-      bbLower: 0,
-      swingHigh: 0,
-      swingLow: 0,
-      trend: 'RANGING',
-      rsiZone: 'NEUTRAL',
-      dayRangePct: 50,
-      priceVsEma20: 'ABOVE',
-      priceVsEma50: 'ABOVE',
-      priceVsEma200: 'ABOVE',
+      // Technical indicators — real values from /api/technicals
+      // via useTechnicals; falls back to neutral defaults while
+      // the first poll is in flight.
+      ema20: ind?.ema20 ?? 0,
+      ema50: ind?.ema50 ?? 0,
+      ema200: ind?.ema200 ?? 0,
+      rsi: ind?.rsi ?? 50,
+      macd: ind?.macd ?? 0,
+      macdSignal: ind?.macdSignal ?? 0,
+      macdHistogram: ind?.macdHistogram ?? 0,
+      macdCross: ind?.macdCross ?? 'NONE',
+      atr: ind?.atr ?? 0,
+      bbUpper: ind?.bbUpper ?? 0,
+      bbLower: ind?.bbLower ?? 0,
+      swingHigh: ind?.swingHigh ?? 0,
+      swingLow: ind?.swingLow ?? 0,
+      trend: ind?.trend ?? 'RANGING',
+      rsiZone: ind?.rsiZone ?? 'NEUTRAL',
+      dayRangePct: ind?.dayRangePct ?? 50,
+      priceVsEma20: ind?.priceVsEma20 ?? 'ABOVE',
+      priceVsEma50: ind?.priceVsEma50 ?? 'ABOVE',
+      priceVsEma200: ind?.priceVsEma200 ?? 'ABOVE',
 
       // Macro
       dxy: signals.data?.dxy.price ?? 0,
@@ -193,13 +196,15 @@ export default function AnalysisPanel() {
       session: session.name,
       sessionIsHighVolatility: session.isHighVolatility,
 
-      // Calendar — clearToTrade defaults true so the panel doesn't
-      // gate analysis off until useCalendar exists. Once the hook
-      // ships, replace with calendar.data?.* reads.
-      clearToTrade: true,
-      warningMessage: null,
-      nextEventTitle: null,
-      nextEventMinutes: null,
+      // Calendar — real values from /api/calendar via useCalendar;
+      // falls back to "no constraints known" defaults until the
+      // first poll lands so the panel doesn't gate analysis off
+      // unnecessarily on cold start.
+      clearToTrade: calendar.data?.clearToTrade ?? true,
+      warningMessage: calendar.data?.warningMessage ?? null,
+      nextEventTitle: calendar.data?.nextHighImpact?.title ?? null,
+      nextEventMinutes:
+        calendar.data?.nextHighImpact?.minutesUntil ?? null,
 
       // News sentiment
       newsBullishCount,
@@ -207,7 +212,13 @@ export default function AnalysisPanel() {
       newsNeutralCount,
       topHeadlines: articles.slice(0, 6).map((a) => a.title),
     }
-  }, [goldPrice.data, signals.data, news.articles])
+  }, [
+    goldPrice.data,
+    signals.data,
+    news.articles,
+    technicals.indicators,
+    calendar.data,
+  ])
 
   // Auto-trigger when the countdown wraps. Note: useAnalysis
   // wraps from 1 → AUTO_INTERVAL without ever emitting 0, so
