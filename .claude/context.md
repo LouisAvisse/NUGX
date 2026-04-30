@@ -209,3 +209,4 @@ Everything else: MEDIUM
 - [#17] Real signals wired — DXY + US10Y via yahoo-finance2, fallback on error
 - [#18] Real news wired — newsdata.io, impact auto-tagging, fallback on error
 - [#19] Real Claude analysis wired — structured JSON prompt, field validation, fallback on error
+- [#20] Trade journal data layer — lib/journal.ts + useJournal hook, localStorage persistence
