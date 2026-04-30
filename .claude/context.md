@@ -202,3 +202,4 @@ Everything else: MEDIUM
 - [#10] PriceBar implemented — live price, change, high/low, session, live indicator
 - [#11] TradingViewChart implemented — XAUUSD 1H dark theme, RSI + MACD
 - [#12] SignalsPanel implemented — DXY, US10Y, spread, session volatility
+- [#13] NewsFeed implemented — articles list, impact badges, hover states, scroll
