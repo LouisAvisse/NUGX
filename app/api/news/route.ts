@@ -14,6 +14,7 @@ import type {
   NewsResponse,
   NewsArticle,
   ImpactLevel,
+  NewsSentiment,
 } from '@/lib/types'
 
 // Keyword sets for impact tagging — case-insensitive matches
@@ -52,6 +53,55 @@ function tagImpact(title: string): ImpactLevel {
   if (HIGH_KEYWORDS.some((k) => lower.includes(k))) return 'HIGH'
   if (LOW_KEYWORDS.some((k) => lower.includes(k))) return 'LOW'
   return 'MEDIUM'
+}
+
+// Sentiment-tagging keyword lists. Independent of impact —
+// `impact` answers "should I pay attention", `sentiment` answers
+// "which way does this push gold". Bullish for gold = anything
+// that weakens the dollar / lowers yields / raises safe-haven
+// demand. Bearish for gold = the inverse. NEUTRAL is the default
+// when neither set hits.
+const BULLISH_GOLD_KEYWORDS = [
+  'war',
+  'sanctions',
+  'crisis',
+  'inflation',
+  'rate cut',
+  'dovish',
+  'dollar weak',
+  'dxy fall',
+  'central bank buy',
+  'safe haven',
+  'geopolit', // matches "geopolitical", "geopolitics"
+  'fed pause',
+  'yield fall',
+  'stimulus',
+  'debt',
+  'deficit',
+]
+
+const BEARISH_GOLD_KEYWORDS = [
+  'rate hike',
+  'hawkish',
+  'dollar strong',
+  'yield rise',
+  'risk on',
+  'equity rally',
+  'tightening',
+  'strong jobs',
+  'beat expectations',
+  'economic growth',
+  'recovery',
+]
+
+function tagSentiment(title: string): NewsSentiment {
+  const lower = title.toLowerCase()
+  // Bullish wins over bearish on overlap — gold's safe-haven
+  // narrative typically dominates when both signals fire (e.g.
+  // "rate hike but recession looming").
+  if (BULLISH_GOLD_KEYWORDS.some((k) => lower.includes(k))) return 'BULLISH'
+  if (BEARISH_GOLD_KEYWORDS.some((k) => lower.includes(k))) return 'BEARISH'
+  return 'NEUTRAL'
 }
 
 // Empty-but-valid response — keeps NewsFeed renderable.
@@ -110,6 +160,10 @@ export async function GET() {
         publishedAt: new Date(r.pubDate ?? Date.now()).toISOString(),
         url: r.link!,
         impact: tagImpact(r.title!),
+        // Directional sentiment for gold — drives the colored
+        // dot in NewsFeed and the bullish/bearish counts in
+        // the analyze request body.
+        sentiment: tagSentiment(r.title!),
       }))
 
     return NextResponse.json({ articles } satisfies NewsResponse)
