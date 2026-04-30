@@ -204,3 +204,4 @@ Everything else: MEDIUM
 - [#12] SignalsPanel implemented — DXY, US10Y, spread, session volatility
 - [#13] NewsFeed implemented — articles list, impact badges, hover states, scroll
 - [#14] AnalysisPanel implemented — bias, confidence, levels, catalyst, auto-trigger every 30min
+- [#15] BottomBar implemented — open, prev close, change, high/low, 52W levels, timestamp
