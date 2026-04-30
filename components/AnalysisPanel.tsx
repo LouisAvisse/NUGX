@@ -23,6 +23,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import Tooltip from '@/components/Tooltip'
 import { useAnalysis } from '@/lib/hooks/useAnalysis'
 import { useGoldPrice } from '@/lib/hooks/useGoldPrice'
 import { useSignals } from '@/lib/hooks/useSignals'
@@ -79,14 +80,19 @@ function biasBadgeStyle(bias: Bias): React.CSSProperties {
   }
 }
 
-// Entry-type badge palette + copy.
+// Entry-type badge palette + copy (French display).
+// Tooltips explain when each type is appropriate so the trader
+// knows whether to fire now, fire small, or wait.
 function entryTypeDisplay(t: EntryType): {
   text: string
+  tooltip: string
   style: React.CSSProperties
 } {
   if (t === 'IDEAL') {
     return {
-      text: '● IDEAL ENTRY',
+      text: '● ENTRÉE IDÉALE',
+      tooltip:
+        "Conditions parfaites maintenant. Pour LONG : pullback vers EMA20 avec RSI 45-55 et histogramme MACD encore positif. Pour SHORT : miroir. C'est l'entrée la plus haute probabilité — tirer maintenant.",
       style: {
         background: '#0a1a0a',
         color: '#4ade80',
@@ -96,7 +102,9 @@ function entryTypeDisplay(t: EntryType): {
   }
   if (t === 'AGGRESSIVE') {
     return {
-      text: '◐ AGGRESSIVE ENTRY',
+      text: '◐ ENTRÉE AGRESSIVE',
+      tooltip:
+        "Setup en formation, l'entrée est tôt. Croisement MACD frais (BULLISH/BEARISH_CROSS sur les 2 dernières bougies) avec le prix déjà au-dessus/dessous de l'EMA20. Réduire la taille — risque-récompense moins favorable qu'une entrée idéale.",
       style: {
         background: '#1a1500',
         color: '#fbbf24',
@@ -105,7 +113,9 @@ function entryTypeDisplay(t: EntryType): {
     }
   }
   return {
-    text: '○ WAIT FOR SETUP',
+    text: '○ ATTENDRE SETUP',
+    tooltip:
+      "Le biais est clair mais les conditions d'entrée ne sont pas réunies. Cas typiques : RSI > 65 (chasing surachat) ou prix à plus d'1 ATR de l'EMA20. NE PAS entrer — attendre que le RSI se normalise ou que le prix revienne.",
     style: {
       background: '#161616',
       color: '#b0b0b0',
@@ -115,16 +125,39 @@ function entryTypeDisplay(t: EntryType): {
 }
 
 // Market-condition tag — drives the small badge next to the
-// COPILOT header text.
+// COPILOTE header text. French display + per-state tooltip.
 function marketConditionDisplay(c: MarketCondition): {
   text: string
+  tooltip: string
   color: string
 } {
-  if (c === 'TRENDING_UP') return { text: '▲ TRENDING', color: '#4ade80' }
-  if (c === 'TRENDING_DOWN') return { text: '▼ TRENDING', color: '#f87171' }
+  if (c === 'TRENDING_UP')
+    return {
+      text: '▲ TENDANCE',
+      tooltip:
+        "Tendance haussière claire — plus hauts plus hauts, plus bas plus hauts en 1H, EMA20 au-dessus de l'EMA50, RSI constamment au-dessus de 50. Conditions idéales pour des entrées LONG.",
+      color: '#4ade80',
+    }
+  if (c === 'TRENDING_DOWN')
+    return {
+      text: '▼ TENDANCE',
+      tooltip:
+        "Tendance baissière claire — plus bas plus bas, plus hauts plus bas en 1H, EMA20 sous l'EMA50, RSI constamment sous 50. Conditions idéales pour des entrées SHORT.",
+      color: '#f87171',
+    }
   if (c === 'BREAKOUT_WATCH')
-    return { text: '◎ BREAKOUT WATCH', color: '#fbbf24' }
-  return { text: '◆ RANGING', color: '#b0b0b0' }
+    return {
+      text: '◎ BREAKOUT',
+      tooltip:
+        'Compression près de la médiane Bollinger, ATR en baisse — expansion de volatilité attendue. Préparer les ordres dans les deux sens, attendre le break clair avant de tirer.',
+      color: '#fbbf24',
+    }
+  return {
+    text: '◆ RANGE',
+    tooltip:
+      'Marché en range — prix oscille entre support/résistance, EMAs convergent, RSI autour de 50. Trades de range possibles (acheter le bas, vendre le haut) mais setups de tendance pas valides.',
+    color: '#b0b0b0',
+  }
 }
 
 // R:R color tier — green ≥1:2, amber ≥1:1.5, red below.
@@ -159,16 +192,39 @@ function signalShortText(b: Bias): string {
   return 'NEUT'
 }
 
-// Display-friendly label for each signal key.
+// Display-friendly label for each signal key (French).
 const SIGNAL_LABELS: Record<keyof SignalBreakdown, string> = {
-  trend: 'TREND',
+  trend: 'TENDANCE',
   momentum: 'MOMENTUM',
   macd: 'MACD',
   dxy: 'DXY',
   us10y: 'US 10Y',
   session: 'SESSION',
-  news: 'NEWS',
-  calendar: 'CALENDAR',
+  news: 'ACTUS',
+  calendar: 'CALENDRIER',
+}
+
+// Tooltip text for each of the 8 confluence signals — explains
+// what the signal measures, how the dot reads, and why it
+// matters for a gold trade. Shown on hover of each signal row
+// label in the breakdown grid.
+const SIGNAL_TOOLTIPS: Record<keyof SignalBreakdown, string> = {
+  trend:
+    "Aligne EMA20/50 + position du prix. Le copilote score le signal HAUSSE / BAISSE / NEUTRE selon que la structure 1H supporte le biais — trader DANS le sens de la tendance pour un meilleur ratio.",
+  momentum:
+    "RSI(14). Vert quand le RSI accompagne le biais (>50 hausse, <50 baisse). Rouge à l'inverse. Neutre si RSI 45-55 — pas d'élan directionnel.",
+  macd:
+    "Histogramme MACD. Positif et croissant = momentum haussier. Négatif et croissant = baissier. Un croisement frais (BULLISH/BEARISH_CROSS sur les 2 dernières bougies) est un des signaux d'entrée les plus forts pour l'or.",
+  dxy:
+    "Direction du Dollar Index. Or et DXY sont inversement corrélés : DXY en baisse = HAUSSIER pour l'or. DXY en hausse = BAISSIER. Un des signaux macro les plus fiables.",
+  us10y:
+    "Direction du rendement Treasury 10 ans. Rendements en hausse = BAISSIER pour l'or (l'or ne paie pas d'intérêt, donc les obligations deviennent plus attractives). Rendements en baisse = HAUSSIER.",
+  session:
+    "Qualité de la session courante. Overlap NY/Londres (12-16 UTC) = signal le plus fort. Hors-session = neutre/à éviter.",
+  news:
+    "Sentiment global des dernières actualités. Compte les titres haussiers vs baissiers du flux récent. Plus de hausses que de baisses → signal HAUSSE.",
+  calendar:
+    "Calendrier économique dégagé pour trader ? HAUSSE = aucun événement à fort impact dans les 45 prochaines minutes. BAISSE = événement imminent, éviter toute nouvelle entrée.",
 }
 
 // Iteration order for the 8-signal grid.
@@ -243,21 +299,28 @@ function Skeleton({
   )
 }
 
-// One trade-parameter cell (entry / stop / target).
+// One trade-parameter cell (entry / stop / target / etc).
+// `tooltip` is required — these are the most decision-critical
+// fields in the panel and the trader needs to know what each
+// one means before risking capital on it.
 function ParamCell({
   label,
   value,
   color,
   loading,
+  tooltip,
 }: {
   label: string
   value: string | undefined
   color: string
   loading: boolean
+  tooltip: string
 }) {
   return (
-    <div>
-      <div style={labelStyle}>{label}</div>
+    <div data-param={label}>
+      <Tooltip position="left" content={tooltip}>
+        <div style={labelStyle}>{label}</div>
+      </Tooltip>
       {loading ? (
         <div style={{ marginTop: '2px' }}>
           <Skeleton width={55} height={11} />
@@ -278,42 +341,39 @@ function ParamCell({
   )
 }
 
-// One row in the 8-signal grid.
+// One row in the 8-signal grid. The label is wrapped in a
+// Tooltip so the trader can hover any of the 8 signals to read
+// what it measures and how to interpret the dot color.
 function SignalRow({
   label,
   bias,
   loading,
+  tooltip,
 }: {
   label: string
   bias: Bias | undefined
   loading: boolean
+  tooltip: string
 }) {
-  if (loading || !bias) {
-    return (
-      <div
-        style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-        }}
-      >
-        <span style={{ ...labelStyle, fontSize: '8px' }}>{label}</span>
-        <span style={{ color: '#666666', fontSize: '8px' }}>——</span>
-      </div>
-    )
-  }
   return (
     <div
+      data-signal={label}
       style={{
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
       }}
     >
-      <span style={{ ...labelStyle, fontSize: '8px' }}>{label}</span>
-      <span style={{ color: signalDotColor(bias), fontSize: '8px' }}>
-        ● {signalShortText(bias)}
-      </span>
+      <Tooltip position="left" content={tooltip}>
+        <span style={{ ...labelStyle, fontSize: '8px' }}>{label}</span>
+      </Tooltip>
+      {loading || !bias ? (
+        <span style={{ color: '#666666', fontSize: '8px' }}>——</span>
+      ) : (
+        <span style={{ color: signalDotColor(bias), fontSize: '8px' }}>
+          ● {signalShortText(bias)}
+        </span>
+      )}
     </div>
   )
 }
@@ -509,6 +569,7 @@ export default function AnalysisPanel() {
     >
       {/* 1. Header. */}
       <div
+        data-section="copilot-header"
         style={{
           display: 'flex',
           justifyContent: 'space-between',
@@ -521,24 +582,33 @@ export default function AnalysisPanel() {
         <div
           style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
         >
-          <span
-            style={{
-              color: '#888888',
-              fontSize: '9px',
-              textTransform: 'uppercase',
-              letterSpacing: '0.12em',
-            }}
-          >COPILOTE</span>
-          {mc && (
+          <Tooltip
+            position="left"
+            content="Copilote IA Marcus Reid — analyse 8 facteurs de confluence (tendance, momentum, MACD, DXY, US10Y, session, actus, calendrier) pour générer une thèse de trade structurée. Auto-rafraîchissement toutes les 30 minutes ou à la demande (touche R)."
+          >
             <span
               style={{
-                color: mc.color,
-                fontSize: '8px',
-                letterSpacing: '0.08em',
+                color: '#888888',
+                fontSize: '9px',
+                textTransform: 'uppercase',
+                letterSpacing: '0.12em',
               }}
             >
-              {mc.text}
+              COPILOTE
             </span>
+          </Tooltip>
+          {mc && (
+            <Tooltip position="bottom" content={mc.tooltip}>
+              <span
+                style={{
+                  color: mc.color,
+                  fontSize: '8px',
+                  letterSpacing: '0.08em',
+                }}
+              >
+                {mc.text}
+              </span>
+            </Tooltip>
           )}
         </div>
         {countdownNode}
@@ -564,6 +634,7 @@ export default function AnalysisPanel() {
 
       {/* 3. Recommendation block — the focal element. */}
       <div
+        data-section="recommendation"
         className={fadeClass}
         style={{
           padding: '12px 12px 10px 12px',
@@ -587,16 +658,21 @@ export default function AnalysisPanel() {
               ——
             </span>
           ) : rec ? (
-            <span
-              style={{
-                color: rec.color,
-                fontSize: '28px',
-                fontWeight: 500,
-                letterSpacing: '0.02em',
-              }}
+            <Tooltip
+              position="bottom"
+              content="Action recommandée par le copilote. LONG = acheter en attendant une hausse. SHORT = vendre en attendant une baisse. FLAT = pas de trade, attendre un meilleur setup. Le copilote ne recommande LONG/SHORT que si au moins 5 signaux sur 8 convergent."
             >
-              {rec.glyph} {rec.text}
-            </span>
+              <span
+                style={{
+                  color: rec.color,
+                  fontSize: '28px',
+                  fontWeight: 500,
+                  letterSpacing: '0.02em',
+                }}
+              >
+                {rec.glyph} {rec.text}
+              </span>
+            </Tooltip>
           ) : (
             <span
               style={{ color: '#666666', fontSize: '28px', fontWeight: 500 }}
@@ -610,7 +686,12 @@ export default function AnalysisPanel() {
             {showSkeleton ? (
               <Skeleton width={80} height={14} />
             ) : data && !showError ? (
-              <span style={biasBadgeStyle(data.bias)}>{data.bias}</span>
+              <Tooltip
+                position="left"
+                content="Biais directionnel sur l'or pour la session courante. BULLISH = on attend une hausse. BEARISH = on attend une baisse. NEUTRAL = pas de direction claire, rester flat."
+              >
+                <span style={biasBadgeStyle(data.bias)}>{data.bias}</span>
+              </Tooltip>
             ) : (
               <span style={{ color: '#666666', fontSize: '9px' }}>——</span>
             )}
@@ -626,7 +707,12 @@ export default function AnalysisPanel() {
                 <span style={{ color: confidenceColor(data.confidence) }}>
                   {data.confidence}
                 </span>{' '}
-                CONFIANCE
+                <Tooltip
+                  position="left"
+                  content="Niveau de confiance du copilote dans sa thèse. ÉLEVÉE = plusieurs signaux alignés. MOYENNE = signaux mitigés. FAIBLE = peu clair, à traiter avec prudence — réduire la taille ou attendre."
+                >
+                  <span>CONFIANCE</span>
+                </Tooltip>
               </span>
             )}
           </div>
@@ -645,18 +731,21 @@ export default function AnalysisPanel() {
                   {data.entryTiming}
                 </div>
                 {et && (
-                  <span
-                    style={{
-                      ...et.style,
-                      display: 'inline-block',
-                      fontSize: '9px',
-                      padding: '3px 8px',
-                      letterSpacing: '0.08em',
-                      marginTop: '6px',
-                    }}
-                  >
-                    {et.text}
-                  </span>
+                  <div style={{ marginTop: '6px' }}>
+                    <Tooltip position="left" content={et.tooltip}>
+                      <span
+                        style={{
+                          ...et.style,
+                          display: 'inline-block',
+                          fontSize: '9px',
+                          padding: '3px 8px',
+                          letterSpacing: '0.08em',
+                        }}
+                      >
+                        {et.text}
+                      </span>
+                    </Tooltip>
+                  </div>
                 )}
               </>
             ) : null}
@@ -666,6 +755,7 @@ export default function AnalysisPanel() {
 
       {/* 4. Trade parameters — entry/stop/target grid + R:R/HOLD + INVALIDATION. */}
       <div
+        data-section="trade-params"
         style={{
           padding: '8px 12px',
           borderBottom: '1px solid #222222',
@@ -683,18 +773,21 @@ export default function AnalysisPanel() {
             value={showError ? undefined : data?.entry}
             color="#60a5fa"
             loading={showSkeleton}
+            tooltip="Zone de prix à laquelle ouvrir la position. Attendre que le prix atteigne ce niveau améliore le ratio risque/récompense — ne pas chasser le prix au-delà."
           />
           <ParamCell
             label="STOP"
             value={showError ? undefined : data?.stop}
             color="#f87171"
             loading={showSkeleton}
+            tooltip="Stop loss — sortir immédiatement à ce prix pour limiter la perte. Toujours utiliser un stop, placé au-delà d'un niveau structurel (swing high/low ou 1-1.5× ATR)."
           />
           <ParamCell
             label="OBJECTIF"
             value={showError ? undefined : data?.target}
             color="#4ade80"
             loading={showSkeleton}
+            tooltip="Niveau de prise de profit. Atteint par le mouvement attendu du copilote. Le ratio risque/récompense est toujours minimum 1:2 — sinon, recommandation FLAT."
           />
         </div>
 
@@ -706,8 +799,13 @@ export default function AnalysisPanel() {
             justifyContent: 'space-between',
           }}
         >
-          <div>
-            <span style={labelStyle}>R/R</span>{' '}
+          <div data-field="rr">
+            <Tooltip
+              position="left"
+              content="Ratio risque/récompense — combien on gagne pour chaque dollar risqué. 1:2 = on risque $1 pour gagner $2. Vert si ≥ 1:2, ambre si ≥ 1:1.5, rouge si moins. Le copilote ne recommande que des trades avec R/R minimum 1:2."
+            >
+              <span style={labelStyle}>R/R</span>
+            </Tooltip>{' '}
             {showSkeleton ? (
               <span style={{ display: 'inline-block', verticalAlign: 'middle' }}>
                 <Skeleton width={40} height={11} />
@@ -727,8 +825,13 @@ export default function AnalysisPanel() {
               </span>
             )}
           </div>
-          <div>
-            <span style={labelStyle}>DURÉE</span>{' '}
+          <div data-field="hold">
+            <Tooltip
+              position="left"
+              content="Durée estimée de détention de la position avant que l'objectif ou le stop ne soit atteint. Pour le day trading sur l'or, typiquement 1 à 4 heures."
+            >
+              <span style={labelStyle}>DURÉE</span>
+            </Tooltip>{' '}
             {showSkeleton ? (
               <span style={{ display: 'inline-block', verticalAlign: 'middle' }}>
                 <Skeleton width={50} height={11} />
@@ -748,6 +851,7 @@ export default function AnalysisPanel() {
 
         {/* INVALIDATION row — full width. */}
         <div
+          data-field="invalidation"
           style={{
             marginTop: '8px',
             display: 'flex',
@@ -755,7 +859,12 @@ export default function AnalysisPanel() {
             alignItems: 'center',
           }}
         >
-          <span style={labelStyle}>INVALIDATION</span>
+          <Tooltip
+            position="left"
+            content="Niveau d'invalidation — prix auquel la thèse du trade est entièrement remise en cause, indépendamment du stop loss. Si le prix l'atteint, le setup est cassé : sortir et réévaluer même si le stop n'a pas été touché."
+          >
+            <span style={labelStyle}>INVALIDATION</span>
+          </Tooltip>
           {showSkeleton ? (
             <Skeleton width={70} height={10} />
           ) : (
@@ -773,6 +882,7 @@ export default function AnalysisPanel() {
 
       {/* 5. Confluence score block. */}
       <div
+        data-section="confluence"
         style={{
           padding: '8px 12px',
           borderBottom: '1px solid #222222',
@@ -786,14 +896,21 @@ export default function AnalysisPanel() {
             marginBottom: '8px',
           }}
         >
-          <span
-            style={{
-              color: '#888888',
-              fontSize: '9px',
-              textTransform: 'uppercase',
-              letterSpacing: '0.12em',
-            }}
-          >CONFLUENCE</span>
+          <Tooltip
+            position="left"
+            content="Score de confluence — nombre de signaux alignés sur 8 (tendance, momentum, MACD, DXY, US10Y, session, actus, calendrier). Le copilote ne recommande LONG ou SHORT que si au moins 5 signaux convergent. En dessous de 5 → FLAT, attendre."
+          >
+            <span
+              style={{
+                color: '#888888',
+                fontSize: '9px',
+                textTransform: 'uppercase',
+                letterSpacing: '0.12em',
+              }}
+            >
+              CONFLUENCE
+            </span>
+          </Tooltip>
           {showSkeleton ? (
             <Skeleton width={40} height={12} />
           ) : data && !showError ? (
@@ -856,6 +973,7 @@ export default function AnalysisPanel() {
               label={SIGNAL_LABELS[key]}
               bias={showError ? undefined : data?.signals[key]}
               loading={showSkeleton}
+              tooltip={SIGNAL_TOOLTIPS[key]}
             />
           ))}
         </div>
@@ -863,6 +981,7 @@ export default function AnalysisPanel() {
 
       {/* 6. Catalyst block — NOW / RISK / TRIGGER + exitPlan. */}
       <div
+        data-section="catalyst"
         style={{ padding: '8px 12px', borderBottom: '1px solid #222222' }}
       >
         {showSkeleton ? (
@@ -881,8 +1000,15 @@ export default function AnalysisPanel() {
         ) : data && cat ? (
           <>
             {/* NOW */}
-            <div style={{ marginBottom: '4px' }}>
-              <span style={{ ...labelStyle, marginRight: '4px' }}>MAINT.</span>
+            <div data-catalyst="now" style={{ marginBottom: '4px' }}>
+              <Tooltip
+                position="left"
+                content="Ce qui fait bouger l'or maintenant — résume en une phrase le moteur principal du marché : actualité, donnée macro, déclencheur technique."
+              >
+                <span style={{ ...labelStyle, marginRight: '4px' }}>
+                  MAINT.
+                </span>
+              </Tooltip>
               <span
                 style={{ color: '#999999', fontSize: '9px', lineHeight: 1.5 }}
               >
@@ -890,14 +1016,21 @@ export default function AnalysisPanel() {
               </span>
             </div>
             {/* RISK */}
-            <div style={{ marginBottom: '4px' }}>
-              <span
-                style={{
-                  ...labelStyle,
-                  color: '#f87171',
-                  marginRight: '4px',
-                }}
-              >RISQUE</span>
+            <div data-catalyst="risk" style={{ marginBottom: '4px' }}>
+              <Tooltip
+                position="left"
+                content="La principale menace qui peut invalider le trade. Surveiller ce signal — s'il se déclenche, sortir avant que le stop loss ne saute."
+              >
+                <span
+                  style={{
+                    ...labelStyle,
+                    color: '#f87171',
+                    marginRight: '4px',
+                  }}
+                >
+                  RISQUE
+                </span>
+              </Tooltip>
               <span
                 style={{ color: '#999999', fontSize: '9px', lineHeight: 1.5 }}
               >
@@ -905,16 +1038,21 @@ export default function AnalysisPanel() {
               </span>
             </div>
             {/* TRIGGER */}
-            <div>
-              <span
-                style={{
-                  ...labelStyle,
-                  color: '#4ade80',
-                  marginRight: '4px',
-                }}
+            <div data-catalyst="trigger">
+              <Tooltip
+                position="left"
+                content="L'événement précis ou l'action de prix qui confirme que l'entrée est valide MAINTENANT. Ne pas entrer avant que ce déclencheur ne se manifeste."
               >
-                DÉCLENCH.
-              </span>
+                <span
+                  style={{
+                    ...labelStyle,
+                    color: '#4ade80',
+                    marginRight: '4px',
+                  }}
+                >
+                  DÉCLENCH.
+                </span>
+              </Tooltip>
               <span
                 style={{
                   color: '#b0b0b0',
@@ -928,6 +1066,7 @@ export default function AnalysisPanel() {
             </div>
             {/* exitPlan */}
             <div
+              data-catalyst="exit"
               style={{
                 marginTop: '6px',
                 color: '#555555',
@@ -936,7 +1075,14 @@ export default function AnalysisPanel() {
                 fontStyle: 'italic',
               }}
             >
-              <span style={{ ...labelStyle, marginRight: '4px' }}>SORTIE</span>
+              <Tooltip
+                position="left"
+                content="Plan de sortie — quand et comment couper la position. Couvre les sorties pré-événement (ex. avant FOMC) et les sorties à objectif/stop."
+              >
+                <span style={{ ...labelStyle, marginRight: '4px' }}>
+                  SORTIE
+                </span>
+              </Tooltip>
               {data.exitPlan}
             </div>
           </>
@@ -956,6 +1102,7 @@ export default function AnalysisPanel() {
             now this is unmistakably the action the trader is
             meant to take. */}
       <button
+        data-section="run-analysis-cta"
         className="terminal-btn"
         onClick={onClickRun}
         disabled={loading || calendarBlocked}
@@ -1005,6 +1152,7 @@ export default function AnalysisPanel() {
 
       {/* 8. Footer — last analysis time + technicals last update. */}
       <div
+        data-section="copilot-footer"
         style={{
           padding: '0 12px 8px 12px',
           display: 'flex',
@@ -1013,14 +1161,14 @@ export default function AnalysisPanel() {
       >
         {data && !showError ? (
           <span style={{ color: '#666666', fontSize: '8px' }}>
-            LAST: {formatDateTime(data.generatedAt)}
+            DERN. : {formatDateTime(data.generatedAt)}
           </span>
         ) : (
           <span />
         )}
         {technicals.lastUpdated ? (
           <span style={{ color: '#666666', fontSize: '8px' }}>
-            TA:{' '}
+            IND. :{' '}
             {technicals.lastUpdated.toLocaleTimeString('en-US', {
               hour: '2-digit',
               minute: '2-digit',
