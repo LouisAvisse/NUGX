@@ -210,3 +210,4 @@ Everything else: MEDIUM
 - [#18] Real news wired — newsdata.io, impact auto-tagging, fallback on error
 - [#19] Real Claude analysis wired — structured JSON prompt, field validation, fallback on error
 - [#20] Trade journal data layer — lib/journal.ts + useJournal hook, localStorage persistence
+- [#21] Trade journal UI — slide-in panel, log form, entry cards, PnL, localStorage persistence
