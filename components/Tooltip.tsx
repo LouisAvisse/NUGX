@@ -1,33 +1,31 @@
 // Tooltip — reusable hover-only tooltip used across the dashboard.
 //
-// Wraps any element. The wrapper is `inline-flex` so wrapping an
-// inline label doesn't change its baseline alignment, and gets
-// `cursor: help` to signal "hover me for context".
+// Wraps any element. The tooltip box renders ONLY while hovered
+// and uses `position: fixed` with viewport-aware coordinates so:
+//   1. It can never be clipped by an ancestor's overflow:hidden
+//      (the strip / panel containers all clip horizontally).
+//   2. It can never extend off-screen — coordinates get clamped
+//      against the viewport with an 8px safety margin so hovering
+//      the right-edge chip in the SignalsPanel strip still shows
+//      the full content.
 //
-// The tooltip box renders only while hovered (mouse enter/leave
-// flips a boolean — no global state, no portals). It's positioned
-// absolutely off the wrapper so it never participates in layout
-// flow — appearing/disappearing causes zero shift in surrounding
-// content.
-//
-// `position` controls where the box appears relative to the
-// wrapper:
+// `position` controls the preferred placement relative to the
+// trigger:
 //   top    (default) — above, horizontally centered
 //   bottom            — below, horizontally centered
 //   left              — to the left, vertically centered
 //   right             — to the right, vertically centered
-// Use top/bottom for narrow horizontally-laid elements (badges,
-// short labels) and left/right when the element sits near the
-// viewport edge so the box doesn't clip.
+// The clamp may shift the box from its preferred placement when
+// it would otherwise leave the viewport — preferable to clipping.
 //
-// A small triangle pointer is drawn on the box's edge facing the
-// wrapper using the classic CSS-border trick (transparent
-// adjacent borders + one solid border = arrow). Pointer color
-// matches the box border so the seam is invisible.
+// No pointer triangle: with viewport clamping the pointer's
+// "anchored to the trigger" promise breaks down (the box can
+// shift horizontally), so we drop it entirely. The tooltip's
+// proximity to the trigger is enough visual coupling.
 
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 interface TooltipProps {
   content: string
@@ -35,113 +33,113 @@ interface TooltipProps {
   position?: 'top' | 'bottom' | 'left' | 'right'
 }
 
-// Box position offsets — keyed by `position` prop. Each maps to
-// the absolute-positioning style applied to the box.
-const boxOffsets: Record<NonNullable<TooltipProps['position']>, React.CSSProperties> = {
-  top: { bottom: 'calc(100% + 8px)', left: '50%', transform: 'translateX(-50%)' },
-  bottom: { top: 'calc(100% + 8px)', left: '50%', transform: 'translateX(-50%)' },
-  left: { right: 'calc(100% + 8px)', top: '50%', transform: 'translateY(-50%)' },
-  right: { left: 'calc(100% + 8px)', top: '50%', transform: 'translateY(-50%)' },
-}
+const TOOLTIP_WIDTH = 220 // px — slightly wider than the old 200 since text gets more breathing room
+const VIEWPORT_PADDING = 8 // px — margin from each viewport edge before clamping
+const TRIGGER_GAP = 8 // px — gap between the trigger and the tooltip box
 
-// Triangle-pointer styles per direction. The pointer is a child
-// of the box; it sits on the edge that faces the wrapper.
-function pointerStyle(
-  position: NonNullable<TooltipProps['position']>
-): React.CSSProperties {
-  const base: React.CSSProperties = {
-    position: 'absolute',
-    width: 0,
-    height: 0,
-  }
-  const borderColor = '#2a2a2a' // matches the box border
-  if (position === 'top') {
-    return {
-      ...base,
-      bottom: '-4px',
-      left: 'calc(50% - 4px)',
-      borderLeft: '4px solid transparent',
-      borderRight: '4px solid transparent',
-      borderTop: `4px solid ${borderColor}`,
-    }
-  }
-  if (position === 'bottom') {
-    return {
-      ...base,
-      top: '-4px',
-      left: 'calc(50% - 4px)',
-      borderLeft: '4px solid transparent',
-      borderRight: '4px solid transparent',
-      borderBottom: `4px solid ${borderColor}`,
-    }
-  }
-  if (position === 'left') {
-    return {
-      ...base,
-      right: '-4px',
-      top: 'calc(50% - 4px)',
-      borderTop: '4px solid transparent',
-      borderBottom: '4px solid transparent',
-      borderLeft: `4px solid ${borderColor}`,
-    }
-  }
-  // right
-  return {
-    ...base,
-    left: '-4px',
-    top: 'calc(50% - 4px)',
-    borderTop: '4px solid transparent',
-    borderBottom: '4px solid transparent',
-    borderRight: `4px solid ${borderColor}`,
-  }
-}
+// Approximate tooltip height for clamp math. Real height varies
+// with content length (one line vs three) — 80px is a generous
+// upper bound that keeps short tooltips from getting clamped
+// against the bottom edge unnecessarily.
+const TOOLTIP_HEIGHT_ESTIMATE = 80
 
 export default function Tooltip({
   content,
   children,
   position = 'top',
 }: TooltipProps) {
+  const wrapperRef = useRef<HTMLSpanElement>(null)
   const [visible, setVisible] = useState(false)
+  const [coords, setCoords] = useState<{ top: number; left: number } | null>(
+    null
+  )
+
+  // Compute viewport-clamped coordinates whenever visibility or
+  // position prop change. Re-running on every show keeps it
+  // correct even if the trigger moved (e.g. after a panel
+  // expanded/collapsed).
+  useEffect(() => {
+    if (!visible || !wrapperRef.current) {
+      setCoords(null)
+      return
+    }
+
+    const rect = wrapperRef.current.getBoundingClientRect()
+
+    // Preferred coordinates per `position` prop.
+    let top: number
+    let left: number
+    switch (position) {
+      case 'bottom':
+        top = rect.bottom + TRIGGER_GAP
+        left = rect.left + rect.width / 2 - TOOLTIP_WIDTH / 2
+        break
+      case 'left':
+        top = rect.top + rect.height / 2 - TOOLTIP_HEIGHT_ESTIMATE / 2
+        left = rect.left - TOOLTIP_WIDTH - TRIGGER_GAP
+        break
+      case 'right':
+        top = rect.top + rect.height / 2 - TOOLTIP_HEIGHT_ESTIMATE / 2
+        left = rect.right + TRIGGER_GAP
+        break
+      case 'top':
+      default:
+        top = rect.top - TOOLTIP_HEIGHT_ESTIMATE - TRIGGER_GAP
+        left = rect.left + rect.width / 2 - TOOLTIP_WIDTH / 2
+        break
+    }
+
+    // Clamp to viewport with an 8px safety margin. Clamping can
+    // shift the box from its preferred position — that's the
+    // intentional trade-off versus clipping.
+    const maxLeft = window.innerWidth - TOOLTIP_WIDTH - VIEWPORT_PADDING
+    const maxTop = window.innerHeight - TOOLTIP_HEIGHT_ESTIMATE - VIEWPORT_PADDING
+    left = Math.max(VIEWPORT_PADDING, Math.min(maxLeft, left))
+    top = Math.max(VIEWPORT_PADDING, Math.min(maxTop, top))
+
+    setCoords({ top, left })
+  }, [visible, position])
 
   return (
     <span
+      ref={wrapperRef}
       // inline-flex keeps inline-level wrapped children visually
-      // unchanged; cursor:help is the conventional "this has more
-      // info" affordance.
+      // unchanged; cursor:help is the conventional "more info"
+      // affordance.
       style={{
         display: 'inline-flex',
         alignItems: 'center',
-        position: 'relative',
         cursor: 'help',
       }}
       onMouseEnter={() => setVisible(true)}
       onMouseLeave={() => setVisible(false)}
     >
       {children}
-      {visible && (
+      {visible && coords && (
         <span
-          // Box: dark panel, slim border, fixed 200px width so
-          // long content wraps cleanly. pointer-events:none so
-          // mousing onto the box doesn't toggle visibility off
-          // (the wrapper still owns the hover).
+          // position:fixed so no ancestor overflow:hidden can
+          // clip the box, and the coordinates are computed in
+          // viewport space.
           style={{
-            ...boxOffsets[position],
-            position: 'absolute',
-            zIndex: 200,
-            background: '#1a1a1a',
+            position: 'fixed',
+            top: `${coords.top}px`,
+            left: `${coords.left}px`,
+            zIndex: 1000,
+            background: '#161616',
             border: '1px solid #2a2a2a',
-            padding: '7px 10px',
-            width: '200px',
-            fontSize: '9px',
-            lineHeight: 1.6,
-            color: '#b0b0b0',
+            padding: '8px 10px',
+            width: `${TOOLTIP_WIDTH}px`,
+            fontSize: '10px',
+            lineHeight: 1.5,
+            color: '#c5c5c5',
             pointerEvents: 'none',
-            fontFamily: 'var(--font-mono)',
-            letterSpacing: '0.02em',
+            fontFamily: 'var(--font-sans)',
+            letterSpacing: '0.01em',
+            borderRadius: '3px',
+            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.4)',
           }}
         >
           {content}
-          <span style={pointerStyle(position)} />
         </span>
       )}
     </span>

@@ -47,6 +47,13 @@ export default function Page() {
   // can drive it without prop-drilling through PriceBar's button.
   const [isJournalOpen, setIsJournalOpen] = useState(false)
 
+  // Side-column collapse state. Each column shrinks from its
+  // natural width down to 28px when collapsed, with a single
+  // expand button visible. The chart fills the freed space via
+  // its existing flex:1.
+  const [leftCollapsed, setLeftCollapsed] = useState(false)
+  const [rightCollapsed, setRightCollapsed] = useState(false)
+
   // Keep the browser-tab title in sync with the live price.
   useEffect(() => {
     if (!goldPrice.data) {
@@ -128,13 +135,15 @@ export default function Page() {
           overflow: 'hidden',
         }}
       >
-        {/* Left column — NewsFeed (flex-1, scrolls) above
-            CalendarPanel (fixed, ~220px). The whole column has
-            overflow:hidden; NewsFeed's internal list scrolls. */}
+        {/* Left column — News (flex-1, scrolls) + Calendar (fixed).
+            Collapses to a 28px strip with an expand button. The
+            whole column has overflow:hidden; NewsFeed's internal
+            list scrolls. */}
         <div
           style={{
-            width: '300px',
-            minWidth: '300px',
+            width: leftCollapsed ? '28px' : '300px',
+            minWidth: leftCollapsed ? '28px' : '300px',
+            transition: 'width 0.2s ease, min-width 0.2s ease',
             display: 'flex',
             flexDirection: 'column',
             gap: '2px',
@@ -142,14 +151,48 @@ export default function Page() {
             background: '#0a0a0a',
             borderRight: '1px solid #222222',
             overflow: 'hidden',
+            position: 'relative',
           }}
         >
-          <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
-            <NewsFeed />
-          </div>
-          <div style={{ flexShrink: 0 }}>
-            <CalendarPanel />
-          </div>
+          {/* Toggle button — sits at the column's INNER edge
+              (right side, facing the chart). One button covers
+              both directions: ◀ when expanded (click to
+              collapse), ▶ when collapsed (click to expand). */}
+          <button
+            className="terminal-btn"
+            onClick={() => setLeftCollapsed((p) => !p)}
+            aria-label={leftCollapsed ? 'Expand news + calendar' : 'Collapse news + calendar'}
+            style={{
+              position: 'absolute',
+              top: leftCollapsed ? '50%' : '6px',
+              right: leftCollapsed ? '4px' : '6px',
+              transform: leftCollapsed ? 'translateY(-50%)' : 'none',
+              zIndex: 5,
+              width: '20px',
+              height: '20px',
+              background: '#161616',
+              border: '1px solid #222222',
+              color: '#999999',
+              fontSize: '9px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontFamily: 'var(--font-sans)',
+            }}
+          >
+            {leftCollapsed ? '▶' : '◀'}
+          </button>
+          {!leftCollapsed && (
+            <>
+              <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
+                <NewsFeed />
+              </div>
+              <div style={{ flexShrink: 0 }}>
+                <CalendarPanel />
+              </div>
+            </>
+          )}
         </div>
 
         {/* Center column — chart fills remaining width. */}
@@ -157,24 +200,53 @@ export default function Page() {
           <TradingViewChart />
         </div>
 
-        {/* Right column — AnalysisPanel only. Slightly wider
-            than the old 300px to fit the rebuilt Copilot card
-            (confluence bar + 8-signal grid + NOW/RISK/TRIGGER). */}
+        {/* Right column — AnalysisPanel only. Same collapse
+            pattern as the left column, mirrored: toggle button
+            on the LEFT inner edge, ▶ when expanded (click to
+            collapse rightward), ◀ when collapsed (click to
+            expand leftward). */}
         <div
           data-right-column
           style={{
-            width: '320px',
-            minWidth: '320px',
+            width: rightCollapsed ? '28px' : '320px',
+            minWidth: rightCollapsed ? '28px' : '320px',
+            transition: 'width 0.2s ease, min-width 0.2s ease',
             display: 'flex',
             flexDirection: 'column',
             gap: '2px',
             padding: '2px',
             background: '#0a0a0a',
             borderLeft: '1px solid #222222',
-            overflowY: 'auto',
+            overflowY: rightCollapsed ? 'hidden' : 'auto',
+            position: 'relative',
           }}
         >
-          <AnalysisPanel />
+          <button
+            className="terminal-btn"
+            onClick={() => setRightCollapsed((p) => !p)}
+            aria-label={rightCollapsed ? 'Expand copilot' : 'Collapse copilot'}
+            style={{
+              position: 'absolute',
+              top: rightCollapsed ? '50%' : '6px',
+              left: rightCollapsed ? '4px' : '6px',
+              transform: rightCollapsed ? 'translateY(-50%)' : 'none',
+              zIndex: 5,
+              width: '20px',
+              height: '20px',
+              background: '#161616',
+              border: '1px solid #222222',
+              color: '#999999',
+              fontSize: '9px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontFamily: 'var(--font-sans)',
+            }}
+          >
+            {rightCollapsed ? '◀' : '▶'}
+          </button>
+          {!rightCollapsed && <AnalysisPanel />}
         </div>
       </div>
 
