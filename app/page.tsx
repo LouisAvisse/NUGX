@@ -25,6 +25,7 @@ import PriceBar from '@/components/PriceBar'
 import TradingViewChart from '@/components/TradingViewChart'
 import AnalysisPanel from '@/components/AnalysisPanel'
 import SignalsPanel from '@/components/SignalsPanel'
+import CalendarPanel from '@/components/CalendarPanel'
 import NewsFeed from '@/components/NewsFeed'
 import BottomBar from '@/components/BottomBar'
 import { useGoldPrice } from '@/lib/hooks/useGoldPrice'
@@ -126,7 +127,14 @@ export default function Page() {
           <TradingViewChart />
         </div>
 
+        {/* Right column — fixed 300px wide. AnalysisPanel +
+            SignalsPanel + CalendarPanel sit at their natural
+            heights; NewsFeed takes leftover space. The whole
+            column is now overflow-y:auto so the trader can
+            scroll when the new CalendarPanel + an expanded
+            AnalysisPanel push content past the viewport. */}
         <div
+          data-right-column
           style={{
             width: '300px',
             minWidth: '300px',
@@ -136,7 +144,7 @@ export default function Page() {
             padding: '2px',
             background: '#0a0a0a',
             borderLeft: '1px solid #222222',
-            overflow: 'hidden',
+            overflowY: 'auto',
           }}
         >
           <div style={{ flexShrink: 0 }}>
@@ -145,7 +153,10 @@ export default function Page() {
           <div style={{ flexShrink: 0 }}>
             <SignalsPanel />
           </div>
-          <div style={{ flex: 1, overflow: 'hidden' }}>
+          <div style={{ flexShrink: 0 }}>
+            <CalendarPanel />
+          </div>
+          <div style={{ flex: 1, minHeight: '160px', overflow: 'hidden' }}>
             <NewsFeed />
           </div>
         </div>
