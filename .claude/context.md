@@ -217,3 +217,4 @@ Everything else: MEDIUM
 - [#26] Tooltip component + applied to existing labels (PriceBar, BottomBar, SignalsPanel headers; AnalysisPanel + NewsFeed pending future-UI items)
 - [#27] Schema expansion — TechnicalIndicators, EconomicEvent/CalendarResponse, NewsSentiment, SignalBreakdown; expanded AnalysisRequest + AnalysisResult; FALLBACK + buildRequest updated with safe defaults
 - [#28] Technicals stack — lib/technicals.ts compute fn, /api/technicals via yahoo-finance2 GC=F 1H candles + technicalindicators package, useTechnicals hook 60s polling
+- [#29] Calendar stack — /api/calendar via ForexFactory weekly JSON, gold-relevant filter, 45-min trade gate, useCalendar hook 60s polling
