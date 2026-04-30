@@ -225,3 +225,4 @@ Everything else: MEDIUM
 - [#34] Keyboard shortcuts + dynamic title — useGoldPrice lifted to page.tsx (no double-poll); J/R/ESC handlers; PriceBar accepts data + journal-state props; AnalysisPanel listens for triggerAnalysis CustomEvent; shortcut hint strip between middle row and BottomBar
 - [#35] CalendarPanel — events list with countdown chips (red+pulse < 30m / amber < 60m / muted), CLEAR/BLOCKED gate indicator, F/P forecast/previous; right column scrolls vertically
 - [#36] SignalsPanel TECHNICAL section — MACRO/TECHNICAL section labels; rows for RSI 14 (OB/OS badge), MACD (cross badge), TREND, EMA 20/50 (compact ▲/▼ chips), ATR 14 (HIGH/NORMAL/LOW VOL), BB BAND position, DAY RANGE progress bar
+- [#37] NewsFeed sentiment UI — sentiment summary bar (BULL/BEAR/NEUT counts + flow verdict), proportional ratio bar, ALL/HIGH/BULL filter chips, per-article sentiment dot before impact badge; footer count reflects active filter

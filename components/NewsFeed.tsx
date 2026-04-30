@@ -1,20 +1,36 @@
 // NewsFeed — bottom slot of the right column.
 //
-// Three-zone vertical layout (header / scrollable list / footer)
-// with the list switching between four states:
+// Five-zone layout (top → bottom):
+//
+//   1. Header bar           NEWS | ALL HIGH BULL filter | HH:MM
+//   2. Sentiment summary    bull/bear/neut dot+counts | flow verdict
+//   3. Ratio bar            proportional 3-segment bar
+//   4. Article list         scrollable; clickable rows with
+//                             sentiment dot + impact badge + title
+//   5. Footer               filtered count | REFRESH 15m
+//
+// Render branches for the list:
 //   loading + empty   → 5 shimmer skeleton rows
 //   error             → centered ⚠ + "NEWS FEED UNAVAILABLE"
 //   empty (no error)  → "NO ARTICLES FOUND" hint
 //   loaded            → one clickable row per article
 //
+// Sentiment data comes from the [#30] tagger added to /api/news.
 // Skeleton + pulse keyframes live in app/globals.css.
 
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNews } from '@/lib/hooks/useNews'
 import { formatTime } from '@/lib/utils'
-import type { ImpactLevel } from '@/lib/types'
+import type { ImpactLevel, NewsArticle, NewsSentiment } from '@/lib/types'
+
+// Filter modes.
+type Filter = 'ALL' | 'HIGH' | 'BULL'
+
+// ─────────────────────────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────────────────────────
 
 function impactBadgeStyle(impact: ImpactLevel): React.CSSProperties {
   const palette =
@@ -29,12 +45,19 @@ function impactBadgeStyle(impact: ImpactLevel): React.CSSProperties {
     padding: '1px 5px',
     letterSpacing: '0.1em',
     flexShrink: 0,
-    marginTop: '1px',
   }
 }
 
-// One skeleton row — shaped like a real article so the list
-// reserves the right vertical space before data lands.
+// Sentiment dot color. Missing sentiment (older payloads) reads
+// as NEUTRAL.
+function sentimentDotColor(s: NewsSentiment | undefined): string {
+  if (s === 'BULLISH') return '#4ade80'
+  if (s === 'BEARISH') return '#f87171'
+  return '#444444'
+}
+
+// Skeleton row — shaped like a real article so the list reserves
+// the right vertical space before data lands.
 function SkeletonRow() {
   return (
     <div
@@ -67,9 +90,8 @@ function SkeletonRow() {
   )
 }
 
-// Centered message used by both error and empty states. Different
-// glyph + lines per call site — extracted because the wrapper
-// styling is identical.
+// Centered message for error / empty states. Different glyph +
+// lines per call site.
 function CenteredMessage({
   glyph,
   primary,
@@ -90,9 +112,7 @@ function CenteredMessage({
         padding: '0 12px',
       }}
     >
-      {glyph && (
-        <div style={{ color: '#333333', fontSize: '20px' }}>{glyph}</div>
-      )}
+      {glyph && <div style={{ color: '#333333', fontSize: '20px' }}>{glyph}</div>}
       <div
         style={{
           color: '#333333',
@@ -117,9 +137,48 @@ function CenteredMessage({
   )
 }
 
+// One filter chip — active state gets a bottom border + bright fg,
+// inactive state is muted with no bottom border.
+function FilterChip({
+  label,
+  value,
+  current,
+  onSelect,
+}: {
+  label: string
+  value: Filter
+  current: Filter
+  onSelect: (v: Filter) => void
+}) {
+  const active = current === value
+  return (
+    <button
+      onClick={() => onSelect(value)}
+      style={{
+        background: 'transparent',
+        border: 'none',
+        borderBottom: active ? '1px solid #e5e5e5' : '1px solid transparent',
+        color: active ? '#e5e5e5' : '#333333',
+        fontSize: '8px',
+        padding: '0 4px',
+        letterSpacing: '0.08em',
+        fontFamily: 'var(--font-mono)',
+        cursor: 'pointer',
+      }}
+    >
+      {label}
+    </button>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Main component
+// ─────────────────────────────────────────────────────────────────
+
 export default function NewsFeed() {
   const { articles, loading, error, lastUpdated } = useNews()
   const [hovered, setHovered] = useState<number | null>(null)
+  const [filter, setFilter] = useState<Filter>('ALL')
 
   // Fade-in when articles array length changes — fires on first
   // load and any subsequent refresh that adds/removes items.
@@ -131,11 +190,52 @@ export default function NewsFeed() {
     return () => clearTimeout(timer)
   }, [articles.length])
 
-  // Pick the right list-body branch.
+  // Sentiment counts derived from the full unfiltered articles[].
+  // The summary + ratio bar always reflect the FULL feed even
+  // when a filter is active, so the trader sees the underlying
+  // distribution at a glance.
+  const sentimentCounts = useMemo(() => {
+    let bull = 0
+    let bear = 0
+    let neut = 0
+    for (const a of articles) {
+      if (a.sentiment === 'BULLISH') bull++
+      else if (a.sentiment === 'BEARISH') bear++
+      else neut++
+    }
+    return { bull, bear, neut, total: articles.length }
+  }, [articles])
+
+  // Flow verdict — bull > bear+1 BULLISH FLOW; bear > bull+1
+  // BEARISH FLOW; everything else MIXED.
+  const verdict = useMemo(() => {
+    const { bull, bear } = sentimentCounts
+    if (bull > bear + 1)
+      return { text: 'BULLISH FLOW', color: '#4ade80' }
+    if (bear > bull + 1)
+      return { text: 'BEARISH FLOW', color: '#f87171' }
+    return { text: 'MIXED', color: '#888888' }
+  }, [sentimentCounts])
+
+  // Apply the active filter to produce the visible list.
+  const visibleArticles: NewsArticle[] = useMemo(() => {
+    if (filter === 'HIGH') return articles.filter((a) => a.impact === 'HIGH')
+    if (filter === 'BULL')
+      return articles.filter((a) => a.sentiment === 'BULLISH')
+    return articles
+  }, [articles, filter])
+
+  // Footer count + label per filter mode.
+  const footerLabel =
+    filter === 'HIGH'
+      ? `${visibleArticles.length} HIGH IMPACT`
+      : filter === 'BULL'
+        ? `${visibleArticles.length} BULLISH`
+        : `${articles.length} ARTICLES`
+
+  // Pick the list body branch based on hook state + filter.
   let body: React.ReactNode
   if (loading && articles.length === 0) {
-    // 5 skeleton rows so the panel reserves vertical real estate
-    // (was 3 — bumped per the error-states pass).
     body = (
       <>
         <SkeletonRow />
@@ -160,8 +260,16 @@ export default function NewsFeed() {
         secondary="Check query or API limits"
       />
     )
+  } else if (visibleArticles.length === 0) {
+    // Filter excluded everything but we have articles.
+    body = (
+      <CenteredMessage
+        primary="NO MATCHES"
+        secondary={`Filter "${filter}" excludes every article in the current feed`}
+      />
+    )
   } else {
-    body = articles.map((a, idx) => {
+    body = visibleArticles.map((a, idx) => {
       const isHovered = hovered === idx
       return (
         <div
@@ -176,43 +284,71 @@ export default function NewsFeed() {
             background: isHovered ? '#161616' : 'transparent',
           }}
         >
+          {/* Top line: sentiment dot + impact badge + title;
+              publishedAt on the right. Title truncates with
+              ellipsis so a long headline doesn't push the time
+              cell off the row. */}
           <div
             style={{
               display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'flex-start',
-              gap: '8px',
+              alignItems: 'center',
+              gap: '6px',
             }}
           >
-            <span style={impactBadgeStyle(a.impact)}>{a.impact}</span>
-            <span style={{ color: '#333333', fontSize: '9px', flexShrink: 0 }}>
-              {formatTime(a.publishedAt)}
-            </span>
-          </div>
-          <div style={{ marginTop: '4px' }}>
-            <div
+            <span
               style={{
+                color: sentimentDotColor(a.sentiment),
+                fontSize: '7px',
+                flexShrink: 0,
+              }}
+            >
+              ●
+            </span>
+            <span style={impactBadgeStyle(a.impact)}>{a.impact}</span>
+            <span
+              style={{
+                flex: 1,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
                 color: isHovered ? '#e5e5e5' : '#888888',
                 fontSize: '10px',
                 lineHeight: 1.4,
               }}
             >
               {a.title}
-            </div>
-            <div
+            </span>
+            <span
               style={{
-                color: '#444444',
+                color: '#333333',
                 fontSize: '9px',
-                marginTop: '3px',
+                flexShrink: 0,
               }}
             >
-              {a.source}
-            </div>
+              {formatTime(a.publishedAt)}
+            </span>
+          </div>
+          {/* Source line — quieter, below the title. */}
+          <div
+            style={{
+              color: '#444444',
+              fontSize: '9px',
+              marginTop: '3px',
+            }}
+          >
+            {a.source}
           </div>
         </div>
       )
     })
   }
+
+  // Ratio bar segment widths — divisor is the larger of total
+  // articles or 1 so we never divide by zero on the empty state.
+  const total = Math.max(1, sentimentCounts.total)
+  const bullPct = (sentimentCounts.bull / total) * 100
+  const neutPct = (sentimentCounts.neut / total) * 100
+  const bearPct = (sentimentCounts.bear / total) * 100
 
   return (
     <div
@@ -225,6 +361,7 @@ export default function NewsFeed() {
         border: '1px solid #222222',
       }}
     >
+      {/* 1. Header — NEWS label, filter chips, last-updated time. */}
       <div
         style={{
           display: 'flex',
@@ -232,6 +369,7 @@ export default function NewsFeed() {
           alignItems: 'center',
           padding: '10px 12px 6px 12px',
           borderBottom: '1px solid #222222',
+          gap: '8px',
         }}
       >
         <span
@@ -244,11 +382,145 @@ export default function NewsFeed() {
         >
           NEWS
         </span>
-        <span style={{ color: '#333333', fontSize: '9px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <FilterChip
+            label="ALL"
+            value="ALL"
+            current={filter}
+            onSelect={setFilter}
+          />
+          <FilterChip
+            label="HIGH"
+            value="HIGH"
+            current={filter}
+            onSelect={setFilter}
+          />
+          <FilterChip
+            label="BULL"
+            value="BULL"
+            current={filter}
+            onSelect={setFilter}
+          />
+        </div>
+        <span
+          style={{
+            color: '#333333',
+            fontSize: '9px',
+            flexShrink: 0,
+            marginLeft: 'auto',
+          }}
+        >
           {lastUpdated ? formatTime(lastUpdated.toISOString()) : '——'}
         </span>
       </div>
 
+      {/* 2. Sentiment summary — counts on the left, flow verdict
+            on the right. Both reflect the FULL articles list,
+            not the filtered subset, so the trader sees the real
+            distribution at a glance. */}
+      <div
+        style={{
+          padding: '6px 12px',
+          borderBottom: '1px solid #222222',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+        }}
+      >
+        <div style={{ display: 'flex', gap: '12px' }}>
+          {/* Bullish count */}
+          <div
+            style={{ display: 'flex', gap: '4px', alignItems: 'center' }}
+          >
+            <span style={{ color: '#4ade80', fontSize: '8px' }}>●</span>
+            <span style={{ color: '#4ade80', fontSize: '9px' }}>
+              {sentimentCounts.bull}
+            </span>
+            <span style={{ color: '#333333', fontSize: '8px' }}>BULL</span>
+          </div>
+          {/* Bearish count */}
+          <div
+            style={{ display: 'flex', gap: '4px', alignItems: 'center' }}
+          >
+            <span style={{ color: '#f87171', fontSize: '8px' }}>●</span>
+            <span style={{ color: '#f87171', fontSize: '9px' }}>
+              {sentimentCounts.bear}
+            </span>
+            <span style={{ color: '#333333', fontSize: '8px' }}>BEAR</span>
+          </div>
+          {/* Neutral count */}
+          <div
+            style={{ display: 'flex', gap: '4px', alignItems: 'center' }}
+          >
+            <span style={{ color: '#444444', fontSize: '8px' }}>●</span>
+            <span style={{ color: '#888888', fontSize: '9px' }}>
+              {sentimentCounts.neut}
+            </span>
+            <span style={{ color: '#333333', fontSize: '8px' }}>NEUT</span>
+          </div>
+        </div>
+        <span
+          style={{
+            color: verdict.color,
+            fontSize: '9px',
+            letterSpacing: '0.08em',
+          }}
+        >
+          {verdict.text}
+        </span>
+      </div>
+
+      {/* 3. Ratio bar — proportional 3-segment colored bar. Falls
+            back to a single muted bar when no articles. */}
+      <div
+        style={{
+          padding: '0 12px 6px 12px',
+          borderBottom: '1px solid #222222',
+        }}
+      >
+        <div
+          style={{
+            width: '100%',
+            height: '3px',
+            background: '#1e1e1e',
+            borderRadius: '1px',
+            display: 'flex',
+            overflow: 'hidden',
+          }}
+        >
+          {sentimentCounts.total === 0 ? (
+            <div
+              style={{
+                flex: 1,
+                background: '#1e1e1e',
+              }}
+            />
+          ) : (
+            <>
+              <div
+                style={{
+                  width: `${bullPct}%`,
+                  background: '#4ade80',
+                }}
+              />
+              <div
+                style={{
+                  width: `${neutPct}%`,
+                  background: '#333333',
+                }}
+              />
+              <div
+                style={{
+                  width: `${bearPct}%`,
+                  background: '#f87171',
+                }}
+              />
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* 4. Article list. */}
       <div
         className={fadeClass}
         style={{ flex: 1, overflowY: 'auto', padding: 0 }}
@@ -256,6 +528,7 @@ export default function NewsFeed() {
         {body}
       </div>
 
+      {/* 5. Footer. Count reflects the active filter. */}
       <div
         style={{
           borderTop: '1px solid #222222',
@@ -264,9 +537,7 @@ export default function NewsFeed() {
           justifyContent: 'space-between',
         }}
       >
-        <span style={{ color: '#333333', fontSize: '9px' }}>
-          {articles.length} ARTICLES
-        </span>
+        <span style={{ color: '#333333', fontSize: '9px' }}>{footerLabel}</span>
         <span style={{ color: '#333333', fontSize: '9px' }}>REFRESH 15m</span>
       </div>
     </div>
