@@ -1,17 +1,24 @@
-// AnalysisPanel — top slot of the right column. The "brain" of
-// the dashboard: pulls live price + macro signals + news + session
-// into an AnalysisRequest and fires /api/analyze either on demand
-// (button click) or on the 30-minute auto cadence.
+// AnalysisPanel — the COPILOT trade card. Top slot of the right
+// column. Visual surface for the confluence engine in
+// /api/analyze ([#32] Marcus Reid persona).
 //
-// Render branches:
-//   loading                → shimmer skeletons in bias/conf/levels/catalyst
-//   error                  → "ANALYSIS FAILED" banner; "——" in
-//                             bias/levels; button text RETRY ANALYSIS
-//   data                   → real bias / levels / catalyst
+// Render branches by hook state:
+//   loading                → shimmer skeletons in every block
+//   error                  → "ANALYSIS FAILED" banner + RETRY button
+//   data                   → full Marcus Reid trade card
 //   neither                → empty-state hint
 //
-// Pulse + shimmer keyframes live in app/globals.css now — no
-// component-local <style> tag.
+// Layout (top → bottom):
+//   1. Header bar          COPILOT | market condition badge | countdown
+//   2. Calendar banner     (conditional — warning copy + amber/red tint)
+//   3. Recommendation      LONG/SHORT/FLAT (large) + bias badge stack
+//                            + entryTiming + entryType badge
+//   4. Trade parameters    ENTRY/STOP/TARGET grid; R:R + HOLD row;
+//                            INVALIDATION row
+//   5. Confluence          score N/8 + 8-block bar + 8-signal grid
+//   6. Catalyst            NOW / RISK / TRIGGER + exitPlan
+//   7. Action button       RUN / RETRY / ANALYZING / CALENDAR BLOCK
+//   8. Footer              LAST analysis time | TA last update time
 
 'use client'
 
@@ -26,9 +33,17 @@ import { biasColor, formatDateTime } from '@/lib/utils'
 import { getCurrentSession } from '@/lib/session'
 import type {
   AnalysisRequest,
+  Bias,
   Confidence,
+  EntryType,
+  MarketCondition,
   Recommendation,
+  SignalBreakdown,
 } from '@/lib/types'
+
+// ─────────────────────────────────────────────────────────────────
+// Color + glyph helpers
+// ─────────────────────────────────────────────────────────────────
 
 function confidenceColor(c: Confidence): string {
   if (c === 'HIGH') return '#4ade80'
@@ -36,12 +51,139 @@ function confidenceColor(c: Confidence): string {
   return '#f87171'
 }
 
-function recDisplay(r: Recommendation): { color: string; glyph: string } {
-  if (r === 'LONG') return { color: '#4ade80', glyph: '▲ ' }
-  if (r === 'SHORT') return { color: '#f87171', glyph: '▼ ' }
-  return { color: '#888888', glyph: '◆ ' }
+function recDisplay(r: Recommendation): {
+  color: string
+  glyph: string
+  text: string
+} {
+  if (r === 'LONG') return { color: '#4ade80', glyph: '▲', text: 'LONG' }
+  if (r === 'SHORT') return { color: '#f87171', glyph: '▼', text: 'SHORT' }
+  return { color: '#888888', glyph: '◆', text: 'FLAT' }
 }
 
+// Bias badge palette — used by the small badge in the
+// recommendation block (right side).
+function biasBadgeStyle(bias: Bias): React.CSSProperties {
+  const palette =
+    bias === 'BULLISH'
+      ? { background: '#0a1a0a', color: '#4ade80', border: '1px solid #1a3a1a' }
+      : bias === 'BEARISH'
+        ? { background: '#1a0a0a', color: '#f87171', border: '1px solid #3a1a1a' }
+        : { background: '#1a1500', color: '#fbbf24', border: '1px solid #3a2e00' }
+  return {
+    ...palette,
+    fontSize: '9px',
+    padding: '2px 8px',
+    letterSpacing: '0.1em',
+    textAlign: 'center',
+  }
+}
+
+// Entry-type badge palette + copy.
+function entryTypeDisplay(t: EntryType): {
+  text: string
+  style: React.CSSProperties
+} {
+  if (t === 'IDEAL') {
+    return {
+      text: '● IDEAL ENTRY',
+      style: {
+        background: '#0a1a0a',
+        color: '#4ade80',
+        border: '1px solid #1a3a1a',
+      },
+    }
+  }
+  if (t === 'AGGRESSIVE') {
+    return {
+      text: '◐ AGGRESSIVE ENTRY',
+      style: {
+        background: '#1a1500',
+        color: '#fbbf24',
+        border: '1px solid #3a2e00',
+      },
+    }
+  }
+  return {
+    text: '○ WAIT FOR SETUP',
+    style: {
+      background: '#161616',
+      color: '#888888',
+      border: '1px solid #2a2a2a',
+    },
+  }
+}
+
+// Market-condition tag — drives the small badge next to the
+// COPILOT header text.
+function marketConditionDisplay(c: MarketCondition): {
+  text: string
+  color: string
+} {
+  if (c === 'TRENDING_UP') return { text: '▲ TRENDING', color: '#4ade80' }
+  if (c === 'TRENDING_DOWN') return { text: '▼ TRENDING', color: '#f87171' }
+  if (c === 'BREAKOUT_WATCH')
+    return { text: '◎ BREAKOUT WATCH', color: '#fbbf24' }
+  return { text: '◆ RANGING', color: '#888888' }
+}
+
+// R:R color tier — green ≥1:2, amber ≥1:1.5, red below.
+function riskRewardColor(rr: string): string {
+  // Parse the second number out of "1:X.Y" — anything we can't
+  // parse falls into the bottom tier.
+  const m = rr.match(/^1\s*:\s*([\d.]+)/)
+  if (!m) return '#f87171'
+  const ratio = parseFloat(m[1])
+  if (!Number.isFinite(ratio)) return '#f87171'
+  if (ratio >= 2) return '#4ade80'
+  if (ratio >= 1.5) return '#fbbf24'
+  return '#f87171'
+}
+
+// Confluence score color tier — green ≥6, amber ≥4, red <4.
+function confluenceColor(score: number): string {
+  if (score >= 6) return '#4ade80'
+  if (score >= 4) return '#fbbf24'
+  return '#f87171'
+}
+
+// Map a single SignalBreakdown direction to its display tone.
+function signalDotColor(b: Bias): string {
+  if (b === 'BULLISH') return '#4ade80'
+  if (b === 'BEARISH') return '#f87171'
+  return '#888888'
+}
+function signalShortText(b: Bias): string {
+  if (b === 'BULLISH') return 'BULL'
+  if (b === 'BEARISH') return 'BEAR'
+  return 'NEUT'
+}
+
+// Display-friendly label for each signal key.
+const SIGNAL_LABELS: Record<keyof SignalBreakdown, string> = {
+  trend: 'TREND',
+  momentum: 'MOMENTUM',
+  macd: 'MACD',
+  dxy: 'DXY',
+  us10y: 'US 10Y',
+  session: 'SESSION',
+  news: 'NEWS',
+  calendar: 'CALENDAR',
+}
+
+// Iteration order for the 8-signal grid.
+const SIGNAL_ORDER: (keyof SignalBreakdown)[] = [
+  'trend',
+  'momentum',
+  'macd',
+  'dxy',
+  'us10y',
+  'session',
+  'news',
+  'calendar',
+]
+
+// Format secondsUntilNext → "MM:SS" (zero-padded).
 function formatCountdown(seconds: number): string {
   const s = Math.max(0, seconds)
   const mins = Math.floor(s / 60)
@@ -49,13 +191,36 @@ function formatCountdown(seconds: number): string {
   return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
 }
 
+// Parse the "NOW: ... RISK: ... TRIGGER: ..." catalyst format
+// into three labeled lines. Falls back gracefully if the model
+// deviates from the format (returns the whole catalyst as `now`).
+//
+// Uses [\s\S] instead of the `s` (dotAll) regex flag so we don't
+// need to bump tsconfig target to ES2018 — same matching
+// behavior, broader compatibility.
+function parseCatalyst(catalyst: string): {
+  now: string
+  risk: string
+  trigger: string
+} {
+  const nowMatch = catalyst.match(/NOW:\s*([\s\S]+?)(?=\s*RISK:|$)/)
+  const riskMatch = catalyst.match(/RISK:\s*([\s\S]+?)(?=\s*TRIGGER:|$)/)
+  const triggerMatch = catalyst.match(/TRIGGER:\s*([\s\S]+?)$/)
+  return {
+    now: nowMatch?.[1]?.trim() ?? catalyst,
+    risk: riskMatch?.[1]?.trim() ?? '——',
+    trigger: triggerMatch?.[1]?.trim() ?? '——',
+  }
+}
+
+// Shared label tone — tiny uppercase muted labels.
 const labelStyle: React.CSSProperties = {
   color: '#444444',
   fontSize: '8px',
   textTransform: 'uppercase',
 }
 
-// Shared shimmer bar — width/height per call site.
+// Reusable shimmer bar.
 function Skeleton({
   width,
   height,
@@ -78,10 +243,8 @@ function Skeleton({
   )
 }
 
-// One cell of the key-levels grid. While loading, renders a
-// shimmer in place of the value. While in error state, shows
-// "——" #333. Otherwise the typed value at its semantic color.
-function LevelCell({
+// One trade-parameter cell (entry / stop / target).
+function ParamCell({
   label,
   value,
   color,
@@ -97,13 +260,14 @@ function LevelCell({
       <div style={labelStyle}>{label}</div>
       {loading ? (
         <div style={{ marginTop: '2px' }}>
-          <Skeleton width={55} height={10} />
+          <Skeleton width={55} height={11} />
         </div>
       ) : (
         <div
           style={{
             color: value ? color : '#333333',
-            fontSize: '10px',
+            fontSize: '11px',
+            fontWeight: 500,
             marginTop: '2px',
           }}
         >
@@ -113,6 +277,50 @@ function LevelCell({
     </div>
   )
 }
+
+// One row in the 8-signal grid.
+function SignalRow({
+  label,
+  bias,
+  loading,
+}: {
+  label: string
+  bias: Bias | undefined
+  loading: boolean
+}) {
+  if (loading || !bias) {
+    return (
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+        }}
+      >
+        <span style={{ ...labelStyle, fontSize: '8px' }}>{label}</span>
+        <span style={{ color: '#333333', fontSize: '8px' }}>——</span>
+      </div>
+    )
+  }
+  return (
+    <div
+      style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+      }}
+    >
+      <span style={{ ...labelStyle, fontSize: '8px' }}>{label}</span>
+      <span style={{ color: signalDotColor(bias), fontSize: '8px' }}>
+        ● {signalShortText(bias)}
+      </span>
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Main component
+// ─────────────────────────────────────────────────────────────────
 
 export default function AnalysisPanel() {
   const analysis = useAnalysis()
@@ -125,8 +333,7 @@ export default function AnalysisPanel() {
 
   const [hoverBtn, setHoverBtn] = useState(false)
 
-  // Fade-in on every fresh analysis result. Watching generatedAt
-  // means even an "identical-looking" follow-up still flashes.
+  // Fade-in on every fresh analysis result.
   const [fadeClass, setFadeClass] = useState('')
   useEffect(() => {
     if (!data) return
@@ -136,12 +343,6 @@ export default function AnalysisPanel() {
   }, [data?.generatedAt])
 
   // Build the analyze payload from current upstream state.
-  // Reads from all six hooks; every numeric default mirrors the
-  // FALLBACK pattern in /api/technicals so a missing upstream
-  // never propagates `undefined` into the request body. News
-  // sentiment counts derive from articles[].sentiment when the
-  // /api/news payload includes it (#30); a missing sentiment
-  // is folded into NEUTRAL via arithmetic so counts always sum.
   const buildRequest = useCallback((): AnalysisRequest => {
     const session = getCurrentSession()
     const articles = news.articles
@@ -151,21 +352,17 @@ export default function AnalysisPanel() {
     const newsBearishCount = articles.filter(
       (a) => a.sentiment === 'BEARISH'
     ).length
-    const newsNeutralCount = articles.length - newsBullishCount - newsBearishCount
+    const newsNeutralCount =
+      articles.length - newsBullishCount - newsBearishCount
 
     const ind = technicals.indicators
 
     return {
-      // Price
       price: goldPrice.data?.price ?? 0,
       changePct: goldPrice.data?.changePct ?? 0,
       high: goldPrice.data?.high ?? 0,
       low: goldPrice.data?.low ?? 0,
       open: goldPrice.data?.open ?? 0,
-
-      // Technical indicators — real values from /api/technicals
-      // via useTechnicals; falls back to neutral defaults while
-      // the first poll is in flight.
       ema20: ind?.ema20 ?? 0,
       ema50: ind?.ema50 ?? 0,
       ema200: ind?.ema200 ?? 0,
@@ -185,28 +382,17 @@ export default function AnalysisPanel() {
       priceVsEma20: ind?.priceVsEma20 ?? 'ABOVE',
       priceVsEma50: ind?.priceVsEma50 ?? 'ABOVE',
       priceVsEma200: ind?.priceVsEma200 ?? 'ABOVE',
-
-      // Macro
       dxy: signals.data?.dxy.price ?? 0,
       dxyChangePct: signals.data?.dxy.changePct ?? 0,
       us10y: signals.data?.us10y.price ?? 0,
       us10yChangePct: signals.data?.us10y.changePct ?? 0,
-
-      // Session
       session: session.name,
       sessionIsHighVolatility: session.isHighVolatility,
-
-      // Calendar — real values from /api/calendar via useCalendar;
-      // falls back to "no constraints known" defaults until the
-      // first poll lands so the panel doesn't gate analysis off
-      // unnecessarily on cold start.
       clearToTrade: calendar.data?.clearToTrade ?? true,
       warningMessage: calendar.data?.warningMessage ?? null,
       nextEventTitle: calendar.data?.nextHighImpact?.title ?? null,
       nextEventMinutes:
         calendar.data?.nextHighImpact?.minutesUntil ?? null,
-
-      // News sentiment
       newsBullishCount,
       newsBearishCount,
       newsNeutralCount,
@@ -220,25 +406,24 @@ export default function AnalysisPanel() {
     calendar.data,
   ])
 
-  // Auto-trigger when the countdown wraps. Note: useAnalysis
-  // wraps from 1 → AUTO_INTERVAL without ever emitting 0, so
-  // this check matches the spec text but doesn't fire in
-  // practice. Future hook tweak should let it pass through 0.
+  // Auto-trigger when the countdown wraps.
   useEffect(() => {
     if (secondsUntilNext === 0 && goldPrice.data) {
       trigger(buildRequest())
     }
   }, [secondsUntilNext, goldPrice.data, buildRequest, trigger])
 
+  // Calendar gate — when blocked, the panel disables the analyze
+  // button entirely with a clear "calendar block" message.
+  const calendarBlocked =
+    calendar.data?.clearToTrade === false && !loading
+
   const onClickRun = () => {
-    if (loading) return
+    if (loading || calendarBlocked) return
     trigger(buildRequest())
   }
 
-  // Header right node — three states:
-  //   loading       → ANALYZING… pulse
-  //   data present  → MM:SS countdown
-  //   neither       → "——"
+  // Header right node — three states.
   let countdownNode: React.ReactNode
   if (loading) {
     countdownNode = (
@@ -258,15 +443,29 @@ export default function AnalysisPanel() {
     )
   }
 
-  const rec = data ? recDisplay(data.recommendation) : null
-
-  // True when the panel should show shimmer placeholders for
-  // bias / confidence / levels / catalyst (active fetch in flight).
   const showSkeleton = loading
-
-  // True when the panel should show the error banner. Spec says
-  // "error !== null and !loading" — loading takes priority.
   const showError = !loading && !!error
+  const rec = data ? recDisplay(data.recommendation) : null
+  const mc = data ? marketConditionDisplay(data.marketCondition) : null
+  const et = data ? entryTypeDisplay(data.entryType) : null
+  const cat = data ? parseCatalyst(data.catalyst) : null
+
+  // Calendar warning banner styling — two tiers.
+  const warningCopy = calendar.data?.warningMessage ?? null
+  const warningHard = calendar.data?.clearToTrade === false
+  const warningStyle: React.CSSProperties | null = warningCopy
+    ? warningHard
+      ? {
+          background: '#1a0000',
+          borderBottom: '1px solid #3a0000',
+          color: '#f87171',
+        }
+      : {
+          background: '#1a0e00',
+          borderBottom: '1px solid #3a2200',
+          color: '#fbbf24',
+        }
+    : null
 
   return (
     <div
@@ -278,7 +477,7 @@ export default function AnalysisPanel() {
         flexShrink: 0,
       }}
     >
-      {/* Header. */}
+      {/* 1. Header. */}
       <div
         style={{
           display: 'flex',
@@ -286,162 +485,360 @@ export default function AnalysisPanel() {
           alignItems: 'center',
           padding: '10px 12px 6px 12px',
           borderBottom: '1px solid #222222',
+          gap: '8px',
         }}
       >
-        <span
-          style={{
-            color: '#444444',
-            fontSize: '9px',
-            textTransform: 'uppercase',
-            letterSpacing: '0.12em',
-          }}
+        <div
+          style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
         >
-          AI ANALYSIS
-        </span>
+          <span
+            style={{
+              color: '#444444',
+              fontSize: '9px',
+              textTransform: 'uppercase',
+              letterSpacing: '0.12em',
+            }}
+          >
+            COPILOT
+          </span>
+          {mc && (
+            <span
+              style={{
+                color: mc.color,
+                fontSize: '8px',
+                letterSpacing: '0.08em',
+              }}
+            >
+              {mc.text}
+            </span>
+          )}
+        </div>
         {countdownNode}
       </div>
 
-      {/* Bias block — flashClass gives a 300ms fade-in on every
-          fresh analysis result (driven by data.generatedAt). */}
+      {/* 2. Calendar warning banner — conditional. */}
+      {warningCopy && warningStyle && (
+        <div
+          style={{
+            ...warningStyle,
+            padding: '6px 12px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+          }}
+        >
+          <span style={{ fontSize: '10px' }}>⚠</span>
+          <span style={{ fontSize: '9px', lineHeight: 1.4 }}>
+            {warningCopy}
+          </span>
+        </div>
+      )}
+
+      {/* 3. Recommendation block — the focal element. */}
       <div
         className={fadeClass}
         style={{
-          padding: '10px 12px',
+          padding: '12px 12px 10px 12px',
           borderBottom: '1px solid #222222',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
         }}
       >
-        <div>
-          <div style={labelStyle}>BIAS</div>
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+          }}
+        >
+          {/* Left: large recommendation glyph + word. */}
           {showSkeleton ? (
-            <div style={{ marginTop: '2px' }}>
-              <Skeleton width={100} height={22} />
-            </div>
-          ) : (
-            <div
+            <Skeleton width={140} height={28} />
+          ) : showError ? (
+            <span
+              style={{ color: '#333333', fontSize: '28px', fontWeight: 500 }}
+            >
+              ——
+            </span>
+          ) : rec ? (
+            <span
               style={{
-                color:
-                  showError
-                    ? '#333333'
-                    : data
-                      ? biasColor(data.bias)
-                      : '#333333',
-                fontSize: '22px',
+                color: rec.color,
+                fontSize: '28px',
                 fontWeight: 500,
-                letterSpacing: '0.05em',
+                letterSpacing: '0.02em',
               }}
             >
-              {showError ? '——' : data ? data.bias : '——'}
-            </div>
-          )}
-        </div>
-        <div style={{ textAlign: 'right' }}>
-          <div style={{ ...labelStyle, textAlign: 'right' }}>CONFIDENCE</div>
-          {showSkeleton ? (
-            <div
-              style={{
-                marginTop: '2px',
-                display: 'flex',
-                justifyContent: 'flex-end',
-              }}
-            >
-              <Skeleton width={50} height={13} />
-            </div>
+              {rec.glyph} {rec.text}
+            </span>
           ) : (
-            <div
-              style={{
-                color:
-                  showError
-                    ? '#333333'
-                    : data
-                      ? confidenceColor(data.confidence)
-                      : '#333333',
-                fontSize: '13px',
-                textAlign: 'right',
-              }}
+            <span
+              style={{ color: '#333333', fontSize: '28px', fontWeight: 500 }}
             >
-              {showError ? '——' : data ? data.confidence : '——'}
-            </div>
+              ——
+            </span>
           )}
-        </div>
-      </div>
 
-      {/* Recommendation. */}
-      <div
-        style={{
-          padding: '8px 12px',
-          borderBottom: '1px solid #222222',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-        }}
-      >
-        <span style={labelStyle}>SIGNAL</span>
-        {showSkeleton ? (
-          <Skeleton width={70} height={12} />
-        ) : (
-          <span
-            style={{
-              color: showError ? '#333333' : rec ? rec.color : '#333333',
-              fontSize: '12px',
-              fontWeight: 500,
-            }}
-          >
-            {showError ? '——' : rec && data ? `${rec.glyph}${data.recommendation}` : '——'}
-          </span>
+          {/* Right: bias badge stack + confidence. */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+            {showSkeleton ? (
+              <Skeleton width={80} height={14} />
+            ) : data && !showError ? (
+              <span style={biasBadgeStyle(data.bias)}>{data.bias}</span>
+            ) : (
+              <span style={{ color: '#333333', fontSize: '9px' }}>——</span>
+            )}
+            {data && !showError && (
+              <span
+                style={{
+                  color: '#444444',
+                  fontSize: '8px',
+                  textAlign: 'right',
+                  letterSpacing: '0.08em',
+                }}
+              >
+                <span style={{ color: confidenceColor(data.confidence) }}>
+                  {data.confidence}
+                </span>{' '}
+                CONFIDENCE
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* entryTiming + entryType badge on a second line. */}
+        {(showSkeleton || (data && !showError)) && (
+          <div style={{ marginTop: '8px' }}>
+            {showSkeleton ? (
+              <Skeleton widthPct="80%" height={9} />
+            ) : data ? (
+              <>
+                <div
+                  style={{ color: '#666666', fontSize: '9px', lineHeight: 1.5 }}
+                >
+                  {data.entryTiming}
+                </div>
+                {et && (
+                  <span
+                    style={{
+                      ...et.style,
+                      display: 'inline-block',
+                      fontSize: '9px',
+                      padding: '3px 8px',
+                      letterSpacing: '0.08em',
+                      marginTop: '6px',
+                    }}
+                  >
+                    {et.text}
+                  </span>
+                )}
+              </>
+            ) : null}
+          </div>
         )}
       </div>
 
-      {/* Key levels grid. */}
+      {/* 4. Trade parameters — entry/stop/target grid + R:R/HOLD + INVALIDATION. */}
       <div
         style={{
           padding: '8px 12px',
           borderBottom: '1px solid #222222',
-          display: 'grid',
-          gridTemplateColumns: '1fr 1fr',
-          gap: '6px',
         }}
       >
-        <LevelCell
-          label="RESISTANCE"
-          value={showError ? undefined : data?.resistance}
-          color="#f87171"
-          loading={showSkeleton}
-        />
-        <LevelCell
-          label="SUPPORT"
-          value={showError ? undefined : data?.support}
-          color="#4ade80"
-          loading={showSkeleton}
-        />
-        <LevelCell
-          label="ENTRY"
-          value={showError ? undefined : data?.entry}
-          color="#60a5fa"
-          loading={showSkeleton}
-        />
-        <LevelCell
-          label="STOP"
-          value={showError ? undefined : data?.stop}
-          color="#f87171"
-          loading={showSkeleton}
-        />
-        <LevelCell
-          label="TARGET"
-          value={showError ? undefined : data?.target}
-          color="#4ade80"
-          loading={showSkeleton}
-        />
-        <div />
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: '1fr 1fr 1fr',
+            gap: '8px',
+          }}
+        >
+          <ParamCell
+            label="ENTRY"
+            value={showError ? undefined : data?.entry}
+            color="#60a5fa"
+            loading={showSkeleton}
+          />
+          <ParamCell
+            label="STOP"
+            value={showError ? undefined : data?.stop}
+            color="#f87171"
+            loading={showSkeleton}
+          />
+          <ParamCell
+            label="TARGET"
+            value={showError ? undefined : data?.target}
+            color="#4ade80"
+            loading={showSkeleton}
+          />
+        </div>
+
+        {/* R:R + HOLD */}
+        <div
+          style={{
+            marginTop: '8px',
+            display: 'flex',
+            justifyContent: 'space-between',
+          }}
+        >
+          <div>
+            <span style={labelStyle}>R/R</span>{' '}
+            {showSkeleton ? (
+              <span style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+                <Skeleton width={40} height={11} />
+              </span>
+            ) : (
+              <span
+                style={{
+                  color:
+                    showError || !data
+                      ? '#333333'
+                      : riskRewardColor(data.riskReward),
+                  fontSize: '11px',
+                  fontWeight: 500,
+                }}
+              >
+                {showError || !data ? '——' : data.riskReward}
+              </span>
+            )}
+          </div>
+          <div>
+            <span style={labelStyle}>HOLD</span>{' '}
+            {showSkeleton ? (
+              <span style={{ display: 'inline-block', verticalAlign: 'middle' }}>
+                <Skeleton width={50} height={11} />
+              </span>
+            ) : (
+              <span
+                style={{
+                  color: showError || !data ? '#333333' : '#888888',
+                  fontSize: '11px',
+                }}
+              >
+                {showError || !data ? '——' : data.holdTime}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* INVALIDATION row — full width. */}
+        <div
+          style={{
+            marginTop: '8px',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+          }}
+        >
+          <span style={labelStyle}>INVALIDATION</span>
+          {showSkeleton ? (
+            <Skeleton width={70} height={10} />
+          ) : (
+            <span
+              style={{
+                color: showError || !data ? '#333333' : '#888888',
+                fontSize: '10px',
+              }}
+            >
+              {showError || !data ? '——' : data.invalidationLevel}
+            </span>
+          )}
+        </div>
       </div>
 
-      {/* Catalyst block — three branches. */}
+      {/* 5. Confluence score block. */}
+      <div
+        style={{
+          padding: '8px 12px',
+          borderBottom: '1px solid #222222',
+        }}
+      >
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            marginBottom: '8px',
+          }}
+        >
+          <span
+            style={{
+              color: '#444444',
+              fontSize: '9px',
+              textTransform: 'uppercase',
+              letterSpacing: '0.12em',
+            }}
+          >
+            CONFLUENCE
+          </span>
+          {showSkeleton ? (
+            <Skeleton width={40} height={12} />
+          ) : data && !showError ? (
+            <span
+              style={{
+                color: confluenceColor(data.confluenceScore),
+                fontSize: '12px',
+                fontWeight: 500,
+              }}
+            >
+              {data.confluenceScore}/{data.confluenceTotal}
+            </span>
+          ) : (
+            <span style={{ color: '#333333', fontSize: '12px' }}>——</span>
+          )}
+        </div>
+
+        {/* 8-block score bar. */}
+        <div style={{ display: 'flex', gap: '3px' }}>
+          {Array.from({ length: 8 }).map((_, i) => {
+            // Filled if i < confluenceScore. Color by bias.
+            const filled =
+              !showSkeleton && !showError && data
+                ? i < data.confluenceScore
+                : false
+            const filledColor = data
+              ? data.bias === 'BULLISH'
+                ? '#4ade80'
+                : data.bias === 'BEARISH'
+                  ? '#f87171'
+                  : '#fbbf24'
+              : '#1e1e1e'
+            return (
+              <div
+                key={i}
+                style={{
+                  flex: 1,
+                  height: '4px',
+                  borderRadius: '1px',
+                  background: filled ? filledColor : '#1e1e1e',
+                  border: filled ? 'none' : '1px solid #2a2a2a',
+                }}
+              />
+            )
+          })}
+        </div>
+
+        {/* 8-signal breakdown grid. */}
+        <div
+          style={{
+            marginTop: '8px',
+            display: 'grid',
+            gridTemplateColumns: '1fr 1fr',
+            gap: '4px',
+          }}
+        >
+          {SIGNAL_ORDER.map((key) => (
+            <SignalRow
+              key={key}
+              label={SIGNAL_LABELS[key]}
+              bias={showError ? undefined : data?.signals[key]}
+              loading={showSkeleton}
+            />
+          ))}
+        </div>
+      </div>
+
+      {/* 6. Catalyst block — NOW / RISK / TRIGGER + exitPlan. */}
       <div
         style={{ padding: '8px 12px', borderBottom: '1px solid #222222' }}
       >
-        <div style={{ ...labelStyle, marginBottom: '4px' }}>CATALYST</div>
         {showSkeleton ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
             <Skeleton widthPct="90%" height={8} />
@@ -454,76 +851,152 @@ export default function AnalysisPanel() {
               ANALYSIS FAILED
             </div>
             <div
-              style={{
-                color: '#444444',
-                fontSize: '9px',
-                marginTop: '4px',
-              }}
+              style={{ color: '#444444', fontSize: '9px', marginTop: '4px' }}
             >
               Check API key and retry.
             </div>
           </>
-        ) : data ? (
+        ) : data && cat ? (
           <>
-            <div
-              style={{ color: '#666666', fontSize: '9px', lineHeight: 1.5 }}
-            >
-              {data.catalyst}
+            {/* NOW */}
+            <div style={{ marginBottom: '4px' }}>
+              <span style={{ ...labelStyle, marginRight: '4px' }}>NOW</span>
+              <span
+                style={{ color: '#666666', fontSize: '9px', lineHeight: 1.5 }}
+              >
+                {cat.now}
+              </span>
             </div>
+            {/* RISK */}
+            <div style={{ marginBottom: '4px' }}>
+              <span
+                style={{
+                  ...labelStyle,
+                  color: '#f87171',
+                  marginRight: '4px',
+                }}
+              >
+                RISK
+              </span>
+              <span
+                style={{ color: '#666666', fontSize: '9px', lineHeight: 1.5 }}
+              >
+                {cat.risk}
+              </span>
+            </div>
+            {/* TRIGGER */}
+            <div>
+              <span
+                style={{
+                  ...labelStyle,
+                  color: '#4ade80',
+                  marginRight: '4px',
+                }}
+              >
+                TRIGGER
+              </span>
+              <span
+                style={{
+                  color: '#888888',
+                  fontSize: '9px',
+                  lineHeight: 1.5,
+                  fontStyle: 'italic',
+                }}
+              >
+                {cat.trigger}
+              </span>
+            </div>
+            {/* exitPlan */}
             <div
               style={{
-                color: '#888888',
+                marginTop: '6px',
+                color: '#555555',
                 fontSize: '9px',
-                marginTop: '4px',
+                lineHeight: 1.5,
                 fontStyle: 'italic',
               }}
             >
-              {data.rationale}
+              <span style={{ ...labelStyle, marginRight: '4px' }}>EXIT</span>
+              {data.exitPlan}
             </div>
           </>
         ) : (
           <div style={{ color: '#333333', fontSize: '9px' }}>
-            Run analysis to generate AI trade thesis.
+            Run analysis to generate trade thesis.
           </div>
         )}
       </div>
 
-      {/* Action button. RETRY ANALYSIS in error state, otherwise
-          RUN ANALYSIS / ANALYZING…. Always enabled in error state. */}
+      {/* 7. Action button. Four states: loading, calendar-blocked,
+            error (RETRY), idle (RUN). */}
       <button
         className="terminal-btn"
         onClick={onClickRun}
-        disabled={loading}
+        disabled={loading || calendarBlocked}
         onMouseEnter={() => setHoverBtn(true)}
         onMouseLeave={() => setHoverBtn(false)}
         style={{
           margin: '10px 12px',
           width: 'calc(100% - 24px)',
-          height: '28px',
+          height: '32px',
           background: 'transparent',
           border: `1px solid ${
-            loading ? '#222222' : hoverBtn ? '#444444' : '#2a2a2a'
+            loading
+              ? '#222222'
+              : calendarBlocked
+                ? '#3a2200'
+                : hoverBtn
+                  ? '#444444'
+                  : '#2a2a2a'
           }`,
-          color: loading ? '#333333' : hoverBtn ? '#e5e5e5' : '#666666',
+          color: loading
+            ? '#333333'
+            : calendarBlocked
+              ? '#fbbf24'
+              : hoverBtn
+                ? '#e5e5e5'
+                : '#666666',
           fontFamily: 'var(--font-mono)',
           fontSize: '10px',
           letterSpacing: '0.1em',
-          cursor: loading ? 'not-allowed' : 'pointer',
+          cursor: loading || calendarBlocked ? 'not-allowed' : 'pointer',
         }}
       >
         {loading
           ? 'ANALYZING...'
-          : showError
-            ? 'RETRY ANALYSIS'
-            : 'RUN ANALYSIS'}
+          : calendarBlocked
+            ? '⚠ CALENDAR BLOCK — ANALYSIS DISABLED'
+            : showError
+              ? 'RETRY ANALYSIS'
+              : 'RUN ANALYSIS'}
       </button>
 
-      {/* Footer. */}
-      <div style={{ padding: '0 12px 8px 12px' }}>
-        {data && !showError && (
+      {/* 8. Footer — last analysis time + technicals last update. */}
+      <div
+        style={{
+          padding: '0 12px 8px 12px',
+          display: 'flex',
+          justifyContent: 'space-between',
+        }}
+      >
+        {data && !showError ? (
           <span style={{ color: '#333333', fontSize: '8px' }}>
             LAST: {formatDateTime(data.generatedAt)}
           </span>
+        ) : (
+          <span />
+        )}
+        {technicals.lastUpdated ? (
+          <span style={{ color: '#333333', fontSize: '8px' }}>
+            TA:{' '}
+            {technicals.lastUpdated.toLocaleTimeString('en-US', {
+              hour: '2-digit',
+              minute: '2-digit',
+              hour12: false,
+            })}
+          </span>
+        ) : (
+          <span />
         )}
       </div>
     </div>

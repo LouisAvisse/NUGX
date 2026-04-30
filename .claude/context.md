@@ -221,3 +221,4 @@ Everything else: MEDIUM
 - [#30] News sentiment tagging — bullish/bearish gold keyword lists; sentiment field populated alongside impact in /api/news
 - [#31] AnalysisPanel.buildRequest wired to useTechnicals + useCalendar — analyze body now carries real indicator + calendar values
 - [#32] /api/analyze rebuilt as Marcus Reid confluence engine — 8-signal scoring, IDEAL/AGGRESSIVE/WAIT entry, NOW/RISK/TRIGGER catalyst, invalidation level, market condition, calendar gate forces FLAT
+- [#33] Copilot AnalysisPanel rebuild — COPILOT header + market condition badge, calendar warning banner, large recommendation + bias/confidence stack, entryTiming + entryType badge, ENTRY/STOP/TARGET grid + R/R + HOLD + INVALIDATION, 8-block confluence bar + 8-signal grid, NOW/RISK/TRIGGER + EXIT, button states (RUN/RETRY/ANALYZING/CALENDAR BLOCK), TA timestamp footer
