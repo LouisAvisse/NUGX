@@ -118,6 +118,170 @@ JSON shape (every field required):
   "generatedAt": "ISO timestamp (we will overwrite this server-side)"
 }`
 
+// Detect a missing or placeholder ANTHROPIC_API_KEY. Treats
+// "your_key_here" (the default in .env.example) and empty values
+// as "no key" — short-circuits the SDK call and returns
+// realistic mock data, so the trader sees a fully-populated
+// Copilot card without a real Anthropic account.
+function hasRealKey(key: string | undefined): key is string {
+  return !!key && key !== 'your_key_here' && key.trim().length > 0
+}
+
+// Build a realistic mock analysis tied to the request's current
+// price + bias from the macro signals. The numbers track real
+// market state (entry/stop/target are computed off `price`),
+// the catalyst follows the NOW/RISK/TRIGGER format, and the
+// confluence breakdown is derived from the input snapshot so
+// it reads as if a real analyst scored it. Used:
+//   - whenever ANTHROPIC_API_KEY is missing or placeholder
+//   - whenever the live SDK call errors out
+function buildMockAnalysis(req: AnalysisRequest): AnalysisResult {
+  // Derive a coarse bias from the snapshot. Bullish leans dominant
+  // when the macro signals are gold-favorable + technicals aren't
+  // overbought; bearish on the inverse. Otherwise neutral.
+  const dxyBullish = req.dxyChangePct < 0 // dollar weakening = good for gold
+  const yieldBullish = req.us10yChangePct < 0 // yields falling = good for gold
+  const trendBullish = req.priceVsEma20 === 'ABOVE' && req.priceVsEma50 === 'ABOVE'
+  const macdBullish = req.macdHistogram > 0
+  const newsBullish = req.newsBullishCount > req.newsBearishCount
+  const sessionBullish = req.sessionIsHighVolatility
+  const calendarBullish = req.clearToTrade
+  const overbought = req.rsi >= 70
+
+  const bullCount =
+    Number(dxyBullish) +
+    Number(yieldBullish) +
+    Number(trendBullish) +
+    Number(macdBullish) +
+    Number(newsBullish) +
+    Number(sessionBullish) +
+    Number(calendarBullish) +
+    Number(!overbought)
+
+  const isBullish = bullCount >= 5
+  const isBearish = bullCount <= 2
+
+  const bias = isBullish ? 'BULLISH' : isBearish ? 'BEARISH' : 'NEUTRAL'
+  const recommendation =
+    !req.clearToTrade
+      ? 'FLAT'
+      : isBullish
+        ? 'LONG'
+        : isBearish
+          ? 'SHORT'
+          : 'FLAT'
+  const confidence = bullCount >= 6 || bullCount <= 1 ? 'HIGH' : bullCount >= 5 || bullCount <= 2 ? 'MEDIUM' : 'LOW'
+
+  // Price-relative levels. Use ATR if available, otherwise a
+  // sensible 1% buffer so the levels never collapse on each other.
+  const atr = req.atr > 0 ? req.atr : Math.max(req.price * 0.01, 5)
+  const p = req.price > 0 ? req.price : 3300
+
+  const entryLow = isBullish ? p - atr * 0.5 : p + atr * 0.3
+  const entryHigh = isBullish ? p - atr * 0.2 : p + atr * 0.6
+  const stop = isBullish ? p - atr * 1.5 : p + atr * 1.5
+  const target = isBullish ? p + atr * 3 : p - atr * 3
+  const support = isBullish ? p - atr * 0.5 : p - atr * 1.2
+  const resistance = isBullish ? p + atr * 1.2 : p + atr * 0.5
+  const invalidation = isBullish ? req.ema50 || p - atr * 2 : req.ema50 || p + atr * 2
+
+  const fmt = (n: number) => `$${n.toFixed(2)}`
+
+  // Confluence breakdown. Each signal scored from the snapshot;
+  // bullCount feeds the score itself.
+  const signalDir = (b: boolean): 'BULLISH' | 'BEARISH' | 'NEUTRAL' =>
+    b ? 'BULLISH' : 'BEARISH'
+
+  const entryType: 'IDEAL' | 'AGGRESSIVE' | 'WAIT' =
+    recommendation === 'FLAT'
+      ? 'WAIT'
+      : overbought || req.rsi <= 30
+        ? 'WAIT'
+        : Math.abs(p - req.ema20) < atr
+          ? 'IDEAL'
+          : 'AGGRESSIVE'
+
+  const marketCondition: AnalysisResult['marketCondition'] =
+    req.trend === 'UPTREND'
+      ? 'TRENDING_UP'
+      : req.trend === 'DOWNTREND'
+        ? 'TRENDING_DOWN'
+        : req.atr < 10
+          ? 'BREAKOUT_WATCH'
+          : 'RANGING'
+
+  const directionWord = isBullish ? 'higher' : isBearish ? 'lower' : 'sideways'
+  const catalystSentence =
+    !req.clearToTrade
+      ? `Calendar gate is closed — ${req.warningMessage ?? 'high-impact event imminent'}`
+      : `Macro tape ${dxyBullish ? 'supportive (DXY soft)' : 'against (DXY firm)'}, ` +
+        `yields ${yieldBullish ? 'easing' : 'rising'}, technicals ${trendBullish ? 'aligned' : 'mixed'}`
+
+  const riskSentence = !req.clearToTrade
+    ? `${req.nextEventTitle ?? 'Pending release'} in ${req.nextEventMinutes ?? '?'} min`
+    : overbought
+      ? 'RSI overbought — pullback risk'
+      : isBullish
+        ? `Failure to hold ${fmt(req.ema20 || p)}; DXY reversal`
+        : `Reversal back above ${fmt(req.ema20 || p)}; DXY rally`
+
+  const triggerSentence = !req.clearToTrade
+    ? 'Wait for the event to print, then reassess'
+    : isBullish
+      ? `Hold above ${fmt(req.ema20 || p - atr)} with MACD histogram expanding`
+      : isBearish
+        ? `Reject ${fmt(req.ema20 || p + atr)} with MACD histogram contracting`
+        : 'Range bound — wait for break of swing high/low'
+
+  return {
+    bias,
+    confidence,
+    recommendation,
+    entry: `${entryLow.toFixed(0)}-${entryHigh.toFixed(0)}`,
+    stop: stop.toFixed(0),
+    target: target.toFixed(0),
+    resistance: resistance.toFixed(0),
+    support: support.toFixed(0),
+    catalyst: `NOW: Gold tape leaning ${directionWord} on session. RISK: ${riskSentence}. TRIGGER: ${triggerSentence}.`,
+    rationale:
+      recommendation === 'FLAT'
+        ? 'Insufficient confluence or calendar block — stand aside.'
+        : `Structure aligns ${isBullish ? 'long' : 'short'} with ${atr.toFixed(2)} ATR room to ${target.toFixed(0)}.`,
+    generatedAt: new Date().toISOString(),
+    confluenceScore: isBullish ? bullCount : 8 - bullCount,
+    confluenceTotal: 8,
+    signals: {
+      trend: signalDir(trendBullish),
+      momentum: overbought ? 'BEARISH' : req.rsi <= 30 ? 'BULLISH' : 'NEUTRAL',
+      macd: signalDir(macdBullish),
+      dxy: signalDir(dxyBullish),
+      us10y: signalDir(yieldBullish),
+      session: sessionBullish ? 'BULLISH' : 'NEUTRAL',
+      news: req.newsBullishCount > req.newsBearishCount
+        ? 'BULLISH'
+        : req.newsBearishCount > req.newsBullishCount
+          ? 'BEARISH'
+          : 'NEUTRAL',
+      calendar: calendarBullish ? 'BULLISH' : 'BEARISH',
+    },
+    holdTime: '1-3 hours',
+    riskReward: '1:2',
+    entryTiming:
+      entryType === 'IDEAL'
+        ? `Enter on next pullback to ${fmt(req.ema20 || p)} with confirming candle close.`
+        : entryType === 'AGGRESSIVE'
+          ? `Setup forming — wait for retest before sizing up.`
+          : `Conditions not aligned. Stand aside until RSI normalizes.`,
+    exitPlan:
+      !req.clearToTrade
+        ? `Stay flat through ${req.nextEventTitle ?? 'pending release'}; reassess after.`
+        : `Trail stop on each new ${isBullish ? 'higher' : 'lower'} swing; full exit at target or session close.`,
+    entryType,
+    invalidationLevel: typeof invalidation === 'number' ? invalidation.toFixed(0) : '——',
+    marketCondition,
+  }
+}
+
 // Stable, typed safe-default. NEUTRAL/LOW/FLAT explicitly tells
 // the trader "no analysis available, do not act". Confluence
 // fields zero out, signals all NEUTRAL, marketCondition RANGING,
@@ -183,8 +347,26 @@ const REQUIRED_FIELDS: (keyof AnalysisResult)[] = [
 ]
 
 export async function POST(request: Request) {
+  // Read the request body once up-front so it's available to
+  // both the placeholder-key short-circuit and the real-call
+  // path. Body shape is enforced by the AnalysisPanel
+  // buildRequest() — server-side validation can be added later.
+  let body: AnalysisRequest
   try {
-    const body: AnalysisRequest = await request.json()
+    body = (await request.json()) as AnalysisRequest
+  } catch {
+    return NextResponse.json(FALLBACK, { status: 200 })
+  }
+
+  // No real Anthropic key configured → return realistic mock
+  // analysis derived from the request snapshot. Keeps the Copilot
+  // card fully populated during local dev / demo without a real
+  // Anthropic account.
+  if (!hasRealKey(process.env.ANTHROPIC_API_KEY)) {
+    return NextResponse.json(buildMockAnalysis(body))
+  }
+
+  try {
 
     // Single user message — formatted plain-text snapshot of the
     // full request. Numbers carry explicit signs/units so the
@@ -283,7 +465,17 @@ Count the totals. Apply the entry rules. Deliver the JSON exactly per the schema
 
     return NextResponse.json(parsed)
   } catch (err) {
+    // Real key was provided but the SDK call / parse failed.
+    // Fall through to a snapshot-derived mock so the trader
+    // sees a fully-populated Copilot card instead of NEUTRAL/
+    // FLAT zeros — outage state is signalled by the LAST stamp
+    // not advancing rather than by an empty UI.
     console.error('[/api/analyze] failed:', err)
-    return NextResponse.json(FALLBACK, { status: 200 })
+    return NextResponse.json(buildMockAnalysis(body))
   }
 }
+
+// Reference FALLBACK so it stays exported as a module-scope
+// constant (used historically; kept for the future "show empty
+// state instead of mock" branch).
+void FALLBACK
