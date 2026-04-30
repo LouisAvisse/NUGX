@@ -22,12 +22,25 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { useGoldPrice } from '@/lib/hooks/useGoldPrice'
 import { getCurrentSession } from '@/lib/session'
 import { formatPrice, formatChange, formatPct, changeColor } from '@/lib/utils'
-import type { SessionName } from '@/lib/types'
+import type { GoldPrice, SessionName } from '@/lib/types'
 import JournalPanel from '@/components/JournalPanel'
 import Tooltip from '@/components/Tooltip'
+
+// Props lifted from app/page.tsx so the live price hook only
+// runs once at the page root (used both for the dynamic browser
+// title and this bar) and the journal-open state is keyboard-
+// driven from the same place. Avoids double-polling and lets
+// the J / ESC shortcuts bypass the JOURNAL button.
+interface PriceBarProps {
+  data: GoldPrice | null
+  loading: boolean
+  error: string | null
+  isJournalOpen: boolean
+  onJournalToggle: () => void
+  onJournalClose: () => void
+}
 
 function sessionColor(name: SessionName): string {
   if (name === 'NY/London Overlap') return '#fbbf24'
@@ -53,11 +66,16 @@ function Skeleton({ width, height }: { width: number; height: number }) {
   )
 }
 
-export default function PriceBar() {
-  const { data, loading, error } = useGoldPrice()
+export default function PriceBar({
+  data,
+  loading,
+  error,
+  isJournalOpen,
+  onJournalToggle,
+  onJournalClose,
+}: PriceBarProps) {
   const session = getCurrentSession()
 
-  const [isJournalOpen, setIsJournalOpen] = useState(false)
   const [hoverJournal, setHoverJournal] = useState(false)
 
   // Price flash — when a new tick's price differs from the last,
@@ -249,7 +267,7 @@ export default function PriceBar() {
         {/* 9. JOURNAL button */}
         <button
           className="terminal-btn"
-          onClick={() => setIsJournalOpen(true)}
+          onClick={onJournalToggle}
           onMouseEnter={() => setHoverJournal(true)}
           onMouseLeave={() => setHoverJournal(false)}
           style={{
@@ -294,10 +312,7 @@ export default function PriceBar() {
         </Tooltip>
       </div>
 
-      <JournalPanel
-        isOpen={isJournalOpen}
-        onClose={() => setIsJournalOpen(false)}
-      />
+      <JournalPanel isOpen={isJournalOpen} onClose={onJournalClose} />
     </>
   )
 }

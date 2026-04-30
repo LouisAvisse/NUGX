@@ -413,6 +413,22 @@ export default function AnalysisPanel() {
     }
   }, [secondsUntilNext, goldPrice.data, buildRequest, trigger])
 
+  // Keyboard shortcut bridge: page.tsx dispatches a
+  // 'triggerAnalysis' CustomEvent on R/r. Listen here and fire
+  // the same path the RUN ANALYSIS button takes — respecting
+  // loading + calendar gate so a stale R-press during a
+  // blocked window can't sneak through.
+  useEffect(() => {
+    function handleTrigger() {
+      if (loading) return
+      if (calendar.data?.clearToTrade === false) return
+      if (!goldPrice.data) return
+      trigger(buildRequest())
+    }
+    window.addEventListener('triggerAnalysis', handleTrigger)
+    return () => window.removeEventListener('triggerAnalysis', handleTrigger)
+  }, [loading, calendar.data, goldPrice.data, trigger, buildRequest])
+
   // Calendar gate — when blocked, the panel disables the analyze
   // button entirely with a clear "calendar block" message.
   const calendarBlocked =
