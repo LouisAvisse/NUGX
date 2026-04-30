@@ -2,10 +2,17 @@
 // title plumbing.
 //
 // Layout zones (top → bottom):
-//   1. Top bar           PriceBar         48px
-//   2. Middle row        Chart + sidebar  flex-1
-//   3. Shortcut hints    J / R / ESC       20px
-//   4. Bottom bar        BottomBar        36px
+//   1. Top bar           PriceBar             48px
+//   2. Signals strip     SignalsPanel         ~78px (global,
+//                                              horizontal, always
+//                                              visible)
+//   3. Middle row        3 cols (flex-1):     fills remaining
+//                          left  280px        NewsFeed (top, scrolls)
+//                                              + CalendarPanel (bottom)
+//                          chart flex:1       TradingViewChart
+//                          right 320px        AnalysisPanel
+//   4. Shortcut hints    J / R / ESC          20px
+//   5. Bottom bar        BottomBar            36px
 //
 // Keyboard shortcuts (handled at page level, ignore typing):
 //   J / j   → toggle the journal overlay
@@ -40,9 +47,7 @@ export default function Page() {
   // can drive it without prop-drilling through PriceBar's button.
   const [isJournalOpen, setIsJournalOpen] = useState(false)
 
-  // Keep the browser-tab title in sync with the live price. While
-  // the page is in a background tab, this is the only signal the
-  // trader sees; the arrow + signed % gives direction at a glance.
+  // Keep the browser-tab title in sync with the live price.
   useEffect(() => {
     if (!goldPrice.data) {
       document.title = 'XAU/USD — Gold Terminal'
@@ -55,8 +60,7 @@ export default function Page() {
     document.title = `${arrow} ${price} (${sign}${pct.toFixed(2)}%) — XAU/USD`
   }, [goldPrice.data?.price, goldPrice.data?.changePct, goldPrice.data])
 
-  // Global keyboard shortcuts. Skip when the user is typing in an
-  // input/textarea so the journal form keystrokes don't fire J/R.
+  // Global keyboard shortcuts. Skip when typing in inputs.
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       const tag = (e.target as HTMLElement | null)?.tagName ?? ''
@@ -72,15 +76,10 @@ export default function Page() {
           break
         case 'r':
         case 'R':
-          // AnalysisPanel listens for this via window.addEventListener.
-          // CustomEvent keeps the shortcut decoupled from the panel's
-          // mount tree — it works whether or not the panel is in the
-          // current viewport.
           window.dispatchEvent(new CustomEvent('triggerAnalysis'))
           break
       }
     }
-
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [])
@@ -96,7 +95,7 @@ export default function Page() {
         background: '#0a0a0a',
       }}
     >
-      {/* 1. Top bar — fixed 48px, panel bg #111, divider #222. */}
+      {/* 1. Top bar — fixed 48px. */}
       <div
         style={{
           height: '48px',
@@ -115,7 +114,13 @@ export default function Page() {
         />
       </div>
 
-      {/* 2. Middle row — chart left, sidebar right. */}
+      {/* 2. Global signals strip — sits below PriceBar, always
+            visible, full viewport width. The component owns its
+            own ~78px height (2 rows of compact chips). */}
+      <SignalsPanel />
+
+      {/* 3. Middle row — 3 columns: left News+Calendar, center
+            chart, right Analysis. */}
       <div
         style={{
           flex: 1,
@@ -123,21 +128,43 @@ export default function Page() {
           overflow: 'hidden',
         }}
       >
+        {/* Left column — NewsFeed (flex-1, scrolls) above
+            CalendarPanel (fixed, ~220px). The whole column has
+            overflow:hidden; NewsFeed's internal list scrolls. */}
+        <div
+          style={{
+            width: '300px',
+            minWidth: '300px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '2px',
+            padding: '2px',
+            background: '#0a0a0a',
+            borderRight: '1px solid #222222',
+            overflow: 'hidden',
+          }}
+        >
+          <div style={{ flex: 1, minHeight: 0, overflow: 'hidden' }}>
+            <NewsFeed />
+          </div>
+          <div style={{ flexShrink: 0 }}>
+            <CalendarPanel />
+          </div>
+        </div>
+
+        {/* Center column — chart fills remaining width. */}
         <div style={{ flex: 1, overflow: 'hidden' }}>
           <TradingViewChart />
         </div>
 
-        {/* Right column — fixed 300px wide. AnalysisPanel +
-            SignalsPanel + CalendarPanel sit at their natural
-            heights; NewsFeed takes leftover space. The whole
-            column is now overflow-y:auto so the trader can
-            scroll when the new CalendarPanel + an expanded
-            AnalysisPanel push content past the viewport. */}
+        {/* Right column — AnalysisPanel only. Slightly wider
+            than the old 300px to fit the rebuilt Copilot card
+            (confluence bar + 8-signal grid + NOW/RISK/TRIGGER). */}
         <div
           data-right-column
           style={{
-            width: '300px',
-            minWidth: '300px',
+            width: '320px',
+            minWidth: '320px',
             display: 'flex',
             flexDirection: 'column',
             gap: '2px',
@@ -147,25 +174,11 @@ export default function Page() {
             overflowY: 'auto',
           }}
         >
-          <div style={{ flexShrink: 0 }}>
-            <AnalysisPanel />
-          </div>
-          <div style={{ flexShrink: 0 }}>
-            <SignalsPanel />
-          </div>
-          <div style={{ flexShrink: 0 }}>
-            <CalendarPanel />
-          </div>
-          <div style={{ flex: 1, minHeight: '160px', overflow: 'hidden' }}>
-            <NewsFeed />
-          </div>
+          <AnalysisPanel />
         </div>
       </div>
 
-      {/* 3. Shortcut hint strip — 20px, between middle row and
-            BottomBar. Each entry is a small key chip + label so
-            the trader sees the shortcuts without having to
-            memorize them. */}
+      {/* 4. Shortcut hint strip — 20px. */}
       <div
         style={{
           height: '20px',
@@ -217,7 +230,7 @@ export default function Page() {
         ))}
       </div>
 
-      {/* 4. Bottom bar — fixed 36px, panel bg #111, divider #222. */}
+      {/* 5. Bottom bar — fixed 36px. */}
       <div
         style={{
           height: '36px',

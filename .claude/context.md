@@ -226,3 +226,4 @@ Everything else: MEDIUM
 - [#35] CalendarPanel — events list with countdown chips (red+pulse < 30m / amber < 60m / muted), CLEAR/BLOCKED gate indicator, F/P forecast/previous; right column scrolls vertically
 - [#36] SignalsPanel TECHNICAL section — MACRO/TECHNICAL section labels; rows for RSI 14 (OB/OS badge), MACD (cross badge), TREND, EMA 20/50 (compact ▲/▼ chips), ATR 14 (HIGH/NORMAL/LOW VOL), BB BAND position, DAY RANGE progress bar
 - [#37] NewsFeed sentiment UI — sentiment summary bar (BULL/BEAR/NEUT counts + flow verdict), proportional ratio bar, ALL/HIGH/BULL filter chips, per-article sentiment dot before impact badge; footer count reflects active filter
+- [#38] Layout reshuffle — News+Calendar moved to LEFT column; SignalsPanel refactored to a horizontal 2-row chip strip below PriceBar (always visible globally); chart shrinks to flex:1 in the 3-column middle row; AnalysisPanel alone on the right (320px)
