@@ -198,3 +198,4 @@ Everything else: MEDIUM
 - [#6] Layout grid implemented — five zones rendering correctly
 - [#7] API route shells with typed mocks — all four routes returning correct shapes
 - [#8] lib/session.ts + lib/utils.ts implemented — helpers ready
+- [#9] All four data hooks implemented — polling intervals set, loading/error states handled
