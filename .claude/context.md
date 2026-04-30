@@ -207,3 +207,4 @@ Everything else: MEDIUM
 - [#15] BottomBar implemented — open, prev close, change, high/low, 52W levels, timestamp
 - [#16] Real gold price wired — gold-api.com, fallback on error, no caching
 - [#17] Real signals wired — DXY + US10Y via yahoo-finance2, fallback on error
+- [#18] Real news wired — newsdata.io, impact auto-tagging, fallback on error
