@@ -2,20 +2,22 @@
 //
 // Layout (left → right, gap 16px, full 48px tall):
 //   1. SYMBOL block        XAU/USD / GOLD SPOT
-//   2. PRICE block         current spot, 20px
+//   2. PRICE block         current spot, 20px (or skeleton / "UNAVAILABLE")
 //   3. CHANGE block        +12.30 (+0.38%) tinted by sign
 //   4. divider             1px × 20px, #222
 //   5. HIGH block          H / session high (green)
 //   6. LOW block           L / session low  (red)
 //   7. divider             1px × 20px, #222
 //   8. SESSION block       optional pulsing dot + session name
-//   9. JOURNAL button      (margin-left:auto) opens the slide-in
-//                          trade journal overlay
+//   9. JOURNAL button      (margin-left:auto) opens the journal overlay
 //  10. LIVE indicator      pulsing green dot + LIVE label
 //
-// Data sources:
-//   - useGoldPrice (polls /api/price every 30s) → price/change/high/low
-//   - getCurrentSession (pure UTC-hour math)    → session name + flag
+// Render branches on the useGoldPrice hook state:
+//   loading (no data yet)   → shimmering skeleton bars in PRICE/CHG/H/L
+//   error                   → "UNAVAILABLE" red in PRICE; "——" in CHG/H/L
+//   data                    → real values
+// pulse + shimmer keyframes live in app/globals.css now — no
+// component-local <style> tag any more.
 
 'use client'
 
@@ -26,40 +28,39 @@ import { formatPrice, formatChange, formatPct, changeColor } from '@/lib/utils'
 import type { SessionName } from '@/lib/types'
 import JournalPanel from '@/components/JournalPanel'
 
-// Map a session name to its label color per the design system.
 function sessionColor(name: SessionName): string {
   if (name === 'NY/London Overlap') return '#fbbf24'
   if (name === 'London' || name === 'New York') return '#60a5fa'
   if (name === 'Tokyo') return '#888888'
-  return '#444444' // Off-hours
+  return '#444444'
 }
 
 const PLACEHOLDER = '——'
 
+// Reusable shimmer bar — width/height per call site.
+function Skeleton({ width, height }: { width: number; height: number }) {
+  return (
+    <div
+      className="shimmer"
+      style={{
+        width: `${width}px`,
+        height: `${height}px`,
+        background: '#1a1a1a',
+        borderRadius: '2px',
+      }}
+    />
+  )
+}
+
 export default function PriceBar() {
-  const { data } = useGoldPrice()
+  const { data, loading, error } = useGoldPrice()
   const session = getCurrentSession()
 
-  // Journal overlay state — owned here for now. The keyboard-
-  // shortcuts commit will lift this to app/page.tsx so `J`/`ESC`
-  // can drive it globally.
   const [isJournalOpen, setIsJournalOpen] = useState(false)
-
-  // Hover state for the JOURNAL button — inline `:hover` isn't
-  // available with style={{}} so we track a boolean.
   const [hoverJournal, setHoverJournal] = useState(false)
 
   return (
     <>
-      {/* Inline keyframes — scoped to this component. */}
-      <style>{`
-        @keyframes pulse {
-          0%, 100% { opacity: 1 }
-          50% { opacity: 0.2 }
-        }
-        .pulse { animation: pulse 1.5s infinite }
-      `}</style>
-
       <div
         style={{
           height: '100%',
@@ -85,29 +86,48 @@ export default function PriceBar() {
           <span style={{ color: '#333333', fontSize: '8px' }}>GOLD SPOT</span>
         </div>
 
-        {/* 2. PRICE */}
+        {/* 2. PRICE — three states. Error wins over loading wins
+            over normal so a recovered fetch shows real data. */}
         <div
           style={{
-            color: data ? '#e5e5e5' : '#444444',
+            color: data && !error ? '#e5e5e5' : '#444444',
             fontSize: '20px',
             fontWeight: 500,
           }}
         >
-          {data ? formatPrice(data.price) : PLACEHOLDER}
+          {error ? (
+            <span style={{ color: '#f87171', fontSize: '11px' }}>
+              UNAVAILABLE
+            </span>
+          ) : loading && !data ? (
+            <Skeleton width={120} height={20} />
+          ) : data ? (
+            formatPrice(data.price)
+          ) : (
+            PLACEHOLDER
+          )}
         </div>
 
         {/* 3. CHANGE */}
         <div style={{ display: 'flex', flexDirection: 'column' }}>
-          <span
-            style={{
-              color: data ? changeColor(data.change) : '#444444',
-              fontSize: '12px',
-            }}
-          >
-            {data
-              ? `${formatChange(data.change)} (${formatPct(data.changePct)})`
-              : PLACEHOLDER}
-          </span>
+          {error ? (
+            <span style={{ color: '#333333', fontSize: '12px' }}>
+              {PLACEHOLDER}
+            </span>
+          ) : loading && !data ? (
+            <Skeleton width={80} height={12} />
+          ) : (
+            <span
+              style={{
+                color: data ? changeColor(data.change) : '#444444',
+                fontSize: '12px',
+              }}
+            >
+              {data
+                ? `${formatChange(data.change)} (${formatPct(data.changePct)})`
+                : PLACEHOLDER}
+            </span>
+          )}
         </div>
 
         {/* 4. Divider */}
@@ -116,17 +136,33 @@ export default function PriceBar() {
         {/* 5. HIGH */}
         <div style={{ display: 'flex', flexDirection: 'column' }}>
           <span style={{ color: '#444444', fontSize: '9px' }}>H</span>
-          <span style={{ color: '#4ade80', fontSize: '11px' }}>
-            {data ? formatPrice(data.high) : PLACEHOLDER}
-          </span>
+          {error ? (
+            <span style={{ color: '#333333', fontSize: '11px' }}>
+              {PLACEHOLDER}
+            </span>
+          ) : loading && !data ? (
+            <Skeleton width={60} height={11} />
+          ) : (
+            <span style={{ color: '#4ade80', fontSize: '11px' }}>
+              {data ? formatPrice(data.high) : PLACEHOLDER}
+            </span>
+          )}
         </div>
 
         {/* 6. LOW */}
         <div style={{ display: 'flex', flexDirection: 'column' }}>
           <span style={{ color: '#444444', fontSize: '9px' }}>L</span>
-          <span style={{ color: '#f87171', fontSize: '11px' }}>
-            {data ? formatPrice(data.low) : PLACEHOLDER}
-          </span>
+          {error ? (
+            <span style={{ color: '#333333', fontSize: '11px' }}>
+              {PLACEHOLDER}
+            </span>
+          ) : loading && !data ? (
+            <Skeleton width={60} height={11} />
+          ) : (
+            <span style={{ color: '#f87171', fontSize: '11px' }}>
+              {data ? formatPrice(data.low) : PLACEHOLDER}
+            </span>
+          )}
         </div>
 
         {/* 7. Divider */}
@@ -154,8 +190,7 @@ export default function PriceBar() {
           </span>
         </div>
 
-        {/* 9. JOURNAL button — anchored right via marginLeft:auto so the
-            LIVE indicator that follows still ends up on the far edge. */}
+        {/* 9. JOURNAL button */}
         <button
           onClick={() => setIsJournalOpen(true)}
           onMouseEnter={() => setHoverJournal(true)}
@@ -177,16 +212,9 @@ export default function PriceBar() {
 
         {/* 10. LIVE indicator */}
         <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '4px',
-          }}
+          style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
         >
-          <span
-            className="pulse"
-            style={{ color: '#4ade80', fontSize: '8px' }}
-          >
+          <span className="pulse" style={{ color: '#4ade80', fontSize: '8px' }}>
             ●
           </span>
           <span
@@ -201,9 +229,6 @@ export default function PriceBar() {
         </div>
       </div>
 
-      {/* Slide-in journal overlay — rendered inline so PriceBar
-          owns the open/close state. The panel uses position:fixed
-          so it overlays the dashboard rather than displacing it. */}
       <JournalPanel
         isOpen={isJournalOpen}
         onClose={() => setIsJournalOpen(false)}

@@ -1,24 +1,14 @@
 // SignalsPanel — middle slot of the right column.
 //
-// Displays the four macro signals that matter for an XAU/USD
-// trader, in fixed order:
-//   Row 1  DXY            — US Dollar Index level + intraday %
-//   Row 2  US 10Y         — 10-year Treasury yield + intraday %
-//   Row 3  SPREAD         — bid/ask spread (static "0.35" for now)
-//   Row 4  SESSION VOL    — HIGH only during NY/London Overlap
+// Renders four rows: DXY, US 10Y, SPREAD (static), SESSION VOL.
+// Inverse-correlation tint on DXY/US10Y values per the macro
+// rule (rising dollar / yields = bearish for gold = red value).
 //
-// Inverse-correlation tint:
-//   DXY and US10Y both move OPPOSITE to gold most days. So the
-//   `value` cell is colored with the *inverse* of the change sign:
-//   a positive (bullish dollar / yield) move shows the value in
-//   red because that's bearish for gold; a negative move shows
-//   the value in green. The accompanying `changePct` cell still
-//   uses the direct sign tint via changeColor() so the trader can
-//   see both perspectives in one glance.
-//
-// Data sources:
-//   - useSignals (polls /api/signals every 60s) → DXY + US10Y
-//   - getCurrentSession (UTC-hour math)         → vol flag for row 4
+// Three render modes:
+//   loading (no data)  → shimmer skeletons in value cells
+//   error              → "SIGNAL ERROR" banner; rows show "——"
+//   data               → real values + pct change
+// Skeleton + pulse keyframes live in app/globals.css.
 
 'use client'
 
@@ -26,20 +16,14 @@ import { useSignals } from '@/lib/hooks/useSignals'
 import { getCurrentSession } from '@/lib/session'
 import { formatPct, changeColor } from '@/lib/utils'
 
-// Inverse-of-sign tint for the *value* of DXY / US10Y rows.
-// > 0 → bearish for gold → red ; < 0 → bullish for gold → green.
 function inverseValueColor(change: number): string {
   if (change > 0) return '#f87171'
   if (change < 0) return '#4ade80'
   return '#e5e5e5'
 }
 
-// Reused for every loading-state cell so widths stay stable when
-// the first /api/signals tick arrives.
 const PLACEHOLDER = '——'
 
-// Shared row chrome — extracted as constants (not a component) so
-// each row's content stays inline and obvious in the JSX.
 const rowStyle: React.CSSProperties = {
   display: 'flex',
   justifyContent: 'space-between',
@@ -58,28 +42,55 @@ const rightSideStyle: React.CSSProperties = {
   alignItems: 'baseline',
 }
 
+// Two-bar shimmer used to placehold the value + pct cells.
+function CellSkeletons() {
+  return (
+    <>
+      <div
+        className="shimmer"
+        style={{
+          width: '60px',
+          height: '10px',
+          background: '#1a1a1a',
+          borderRadius: '2px',
+        }}
+      />
+      <div
+        className="shimmer"
+        style={{
+          width: '40px',
+          height: '8px',
+          background: '#1a1a1a',
+          borderRadius: '2px',
+        }}
+      />
+    </>
+  )
+}
+
 export default function SignalsPanel() {
-  const { data } = useSignals()
-  // Re-evaluated on every render so the SESSION VOL row updates
-  // automatically when the trader rolls into the next session.
+  const { data, loading, error } = useSignals()
   const session = getCurrentSession()
 
-  // Optional-chained — both will be undefined until the first
-  // fetch settles. The narrowing checks below switch the
-  // affected cells to the loading placeholder.
   const dxy = data?.dxy
   const us10y = data?.us10y
 
-  // "UPD HH:MM" once data has loaded, "UPDATING..." beforehand.
-  // No timeZone option here — uses the trader's local wall clock,
-  // which is what they want for a "last updated" footer.
+  // Show "UPD HH:MM" once we have a successful fetch, else
+  // either UPDATING (loading) or "——" (error).
   const upd = data
     ? `UPD ${new Date().toLocaleTimeString('en-US', {
         hour: '2-digit',
         minute: '2-digit',
         hour12: false,
       })}`
-    : 'UPDATING...'
+    : error
+      ? PLACEHOLDER
+      : 'UPDATING...'
+
+  // True for the "show skeletons" branch — no data yet AND
+  // we're still pre-error (errors collapse into the rows-with-
+  // dashes branch below).
+  const showSkeleton = !data && loading && !error
 
   return (
     <div
@@ -92,7 +103,7 @@ export default function SignalsPanel() {
         gap: '6px',
       }}
     >
-      {/* Panel header — small, muted, with a hairline divider below. */}
+      {/* Header. */}
       <div
         style={{
           color: '#444444',
@@ -107,53 +118,79 @@ export default function SignalsPanel() {
         MARKET SIGNALS
       </div>
 
-      {/* Row 1 — DXY (no $ sign; index level via toFixed(2)). */}
+      {/* Optional error banner — rendered only when the signals
+          fetch has surfaced an error string. */}
+      {error && (
+        <div
+          style={{
+            color: '#f87171',
+            fontSize: '9px',
+            paddingBottom: '4px',
+          }}
+        >
+          SIGNAL ERROR
+        </div>
+      )}
+
+      {/* DXY row */}
       <div style={rowStyle}>
         <span style={labelStyle}>DXY</span>
         <div style={rightSideStyle}>
-          <span
-            style={{
-              color: dxy ? inverseValueColor(dxy.change) : '#333333',
-              fontSize: '11px',
-            }}
-          >
-            {dxy ? dxy.price.toFixed(2) : PLACEHOLDER}
-          </span>
-          <span
-            style={{
-              color: dxy ? changeColor(dxy.change) : '#333333',
-              fontSize: '10px',
-            }}
-          >
-            {dxy ? formatPct(dxy.changePct) : PLACEHOLDER}
-          </span>
+          {showSkeleton ? (
+            <CellSkeletons />
+          ) : (
+            <>
+              <span
+                style={{
+                  color: dxy ? inverseValueColor(dxy.change) : '#333333',
+                  fontSize: '11px',
+                }}
+              >
+                {dxy ? dxy.price.toFixed(2) : PLACEHOLDER}
+              </span>
+              <span
+                style={{
+                  color: dxy ? changeColor(dxy.change) : '#333333',
+                  fontSize: '10px',
+                }}
+              >
+                {dxy ? formatPct(dxy.changePct) : PLACEHOLDER}
+              </span>
+            </>
+          )}
         </div>
       </div>
 
-      {/* Row 2 — US 10Y (yield in percent, suffixed with "%"). */}
+      {/* US10Y row */}
       <div style={rowStyle}>
         <span style={labelStyle}>US 10Y</span>
         <div style={rightSideStyle}>
-          <span
-            style={{
-              color: us10y ? inverseValueColor(us10y.change) : '#333333',
-              fontSize: '11px',
-            }}
-          >
-            {us10y ? `${us10y.price.toFixed(2)}%` : PLACEHOLDER}
-          </span>
-          <span
-            style={{
-              color: us10y ? changeColor(us10y.change) : '#333333',
-              fontSize: '10px',
-            }}
-          >
-            {us10y ? formatPct(us10y.changePct) : PLACEHOLDER}
-          </span>
+          {showSkeleton ? (
+            <CellSkeletons />
+          ) : (
+            <>
+              <span
+                style={{
+                  color: us10y ? inverseValueColor(us10y.change) : '#333333',
+                  fontSize: '11px',
+                }}
+              >
+                {us10y ? `${us10y.price.toFixed(2)}%` : PLACEHOLDER}
+              </span>
+              <span
+                style={{
+                  color: us10y ? changeColor(us10y.change) : '#333333',
+                  fontSize: '10px',
+                }}
+              >
+                {us10y ? formatPct(us10y.changePct) : PLACEHOLDER}
+              </span>
+            </>
+          )}
         </div>
       </div>
 
-      {/* Row 3 — SPREAD (static placeholder until a real source lands). */}
+      {/* SPREAD row — static. */}
       <div style={rowStyle}>
         <span style={labelStyle}>SPREAD</span>
         <div style={rightSideStyle}>
@@ -161,7 +198,7 @@ export default function SignalsPanel() {
         </div>
       </div>
 
-      {/* Row 4 — SESSION VOL — pure session-driven, no fetch needed. */}
+      {/* SESSION VOL row — pure session-driven, no fetch. */}
       <div style={rowStyle}>
         <span style={labelStyle}>SESSION VOL</span>
         <div style={rightSideStyle}>
@@ -176,7 +213,7 @@ export default function SignalsPanel() {
         </div>
       </div>
 
-      {/* UPD footer — hairline divider + last-update marker. */}
+      {/* UPD footer. */}
       <div
         style={{
           borderTop: '1px solid #222222',

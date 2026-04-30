@@ -77,18 +77,6 @@ export default function BottomBar() {
 
   return (
     <>
-      {/* Local pulse keyframes — same definition PriceBar uses.
-          Kept inline so this component stays self-contained until
-          the upcoming "global animations" commit centralizes them
-          in globals.css. */}
-      <style>{`
-        @keyframes pulse {
-          0%, 100% { opacity: 1 }
-          50% { opacity: 0.2 }
-        }
-        .pulse { animation: pulse 1.5s infinite }
-      `}</style>
-
       <div
         style={{
           height: '100%',

@@ -46,3 +46,46 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #444444;
 }
+
+/* ──────────────────────────────────────────────────────────
+ * Global animations.
+ *
+ * Pulled out of per-component <style> tags so every component
+ * can reference them without duplicating the keyframes. The
+ * old inline tags in PriceBar / BottomBar / AnalysisPanel are
+ * removed — these definitions cover all consumers.
+ * ────────────────────────────────────────────────────────── */
+
+/* Shimmer — used by skeleton placeholders while data loads.
+ * Subtle opacity oscillation so the skeleton reads as "active"
+ * without distracting from real content elsewhere on screen. */
+@keyframes shimmer {
+  0% {
+    opacity: 0.4;
+  }
+  50% {
+    opacity: 0.8;
+  }
+  100% {
+    opacity: 0.4;
+  }
+}
+.shimmer {
+  animation: shimmer 1.5s infinite;
+}
+
+/* Pulse — used by the LIVE indicator dot and the high-volatility
+ * session marker. Sharper opacity dip than shimmer so the dot
+ * reads as "live tick" rather than "loading". */
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.2;
+  }
+}
+.pulse {
+  animation: pulse 1.5s infinite;
+}

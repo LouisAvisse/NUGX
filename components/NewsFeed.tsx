@@ -1,23 +1,13 @@
 // NewsFeed — bottom slot of the right column.
 //
-// Three-zone vertical layout:
-//   1. Header  (fixed)        NEWS label + last-updated time
-//   2. List    (flex:1, scrolls internally — global webkit
-//              scrollbar styles from globals.css apply)
-//   3. Footer  (fixed)        article count + 15-min refresh hint
+// Three-zone vertical layout (header / scrollable list / footer)
+// with the list switching between four states:
+//   loading + empty   → 5 shimmer skeleton rows
+//   error             → centered ⚠ + "NEWS FEED UNAVAILABLE"
+//   empty (no error)  → "NO ARTICLES FOUND" hint
+//   loaded            → one clickable row per article
 //
-// The list has three rendering modes:
-//   - loading   → 3 skeleton rows (deliberately mimics the shape of
-//                 a real article so the panel doesn't pop in size
-//                 when data lands)
-//   - error     → centered "NEWS UNAVAILABLE" message
-//   - loaded    → one row per article; click opens the source URL
-//                 in a new tab; hover tints the row and brightens
-//                 the title to #e5e5e5
-//
-// Data source:
-//   - useNews (polls /api/news every 15 minutes) →
-//     { articles, loading, error, lastUpdated }
+// Skeleton + pulse keyframes live in app/globals.css.
 
 'use client'
 
@@ -26,10 +16,6 @@ import { useNews } from '@/lib/hooks/useNews'
 import { formatTime } from '@/lib/utils'
 import type { ImpactLevel } from '@/lib/types'
 
-// Color scheme per impact level. Each badge gets a tinted bg + a
-// foreground color + a hairline border that's a slightly lighter
-// version of the bg. Dark by design — the badges should sit
-// quietly until the trader scans for them.
 function impactBadgeStyle(impact: ImpactLevel): React.CSSProperties {
   const palette =
     impact === 'HIGH'
@@ -47,83 +33,129 @@ function impactBadgeStyle(impact: ImpactLevel): React.CSSProperties {
   }
 }
 
-// One loading skeleton — two stacked grey bars inside a fixed-height
-// row. Rendered 3× when `loading` is true and we have no articles
-// yet, so the panel reserves the right vertical space immediately.
+// One skeleton row — shaped like a real article so the list
+// reserves the right vertical space before data lands.
 function SkeletonRow() {
   return (
     <div
       style={{
-        height: '48px',
-        borderBottom: '1px solid #1a1a1a',
+        height: '52px',
         padding: '10px 12px',
-        background: '#161616',
+        borderBottom: '1px solid #1a1a1a',
       }}
     >
-      <div style={{ width: '70%', height: '8px', background: '#1e1e1e' }} />
       <div
+        className="shimmer"
         style={{
-          width: '40%',
-          height: '6px',
+          width: '75%',
+          height: '8px',
           background: '#1a1a1a',
-          marginTop: '6px',
+          borderRadius: '2px',
+        }}
+      />
+      <div
+        className="shimmer"
+        style={{
+          width: '35%',
+          height: '7px',
+          background: '#1a1a1a',
+          borderRadius: '2px',
+          marginTop: '8px',
         }}
       />
     </div>
   )
 }
 
+// Centered message used by both error and empty states. Different
+// glyph + lines per call site — extracted because the wrapper
+// styling is identical.
+function CenteredMessage({
+  glyph,
+  primary,
+  secondary,
+}: {
+  glyph?: string
+  primary: string
+  secondary: string
+}) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        height: '100%',
+        padding: '0 12px',
+      }}
+    >
+      {glyph && (
+        <div style={{ color: '#333333', fontSize: '20px' }}>{glyph}</div>
+      )}
+      <div
+        style={{
+          color: '#333333',
+          fontSize: '10px',
+          marginTop: glyph ? '8px' : 0,
+          textAlign: 'center',
+        }}
+      >
+        {primary}
+      </div>
+      <div
+        style={{
+          color: '#222222',
+          fontSize: '9px',
+          marginTop: '4px',
+          textAlign: 'center',
+        }}
+      >
+        {secondary}
+      </div>
+    </div>
+  )
+}
+
 export default function NewsFeed() {
   const { articles, loading, error, lastUpdated } = useNews()
-  // Track the index of the row currently under the cursor. Single
-  // value is enough — only one row can be hovered at a time.
   const [hovered, setHovered] = useState<number | null>(null)
 
-  // The list body switches between three rendering modes. We pick
-  // a single React node and inject it inside the same scroll
-  // container so the layout never reflows.
+  // Pick the right list-body branch.
   let body: React.ReactNode
-
   if (loading && articles.length === 0) {
-    // Initial load — show 3 skeleton rows.
+    // 5 skeleton rows so the panel reserves vertical real estate
+    // (was 3 — bumped per the error-states pass).
     body = (
       <>
+        <SkeletonRow />
+        <SkeletonRow />
         <SkeletonRow />
         <SkeletonRow />
         <SkeletonRow />
       </>
     )
   } else if (error) {
-    // Error after the first attempt failed. We don't surface the
-    // raw error string — useNews already converts it into a stable
-    // "News unavailable" message; here we just need a centered
-    // marker so the panel doesn't look broken.
     body = (
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          height: '100%',
-          color: '#333333',
-          fontSize: '10px',
-        }}
-      >
-        NEWS UNAVAILABLE
-      </div>
+      <CenteredMessage
+        glyph="⚠"
+        primary="NEWS FEED UNAVAILABLE"
+        secondary="Retrying in 15 minutes"
+      />
+    )
+  } else if (articles.length === 0) {
+    body = (
+      <CenteredMessage
+        primary="NO ARTICLES FOUND"
+        secondary="Check query or API limits"
+      />
     )
   } else {
-    // Loaded — render every article as a clickable row.
     body = articles.map((a, idx) => {
       const isHovered = hovered === idx
       return (
         <div
           key={`${a.url}-${idx}`}
-          // Hovering tints the row bg; clicking opens the source
-          // URL in a new tab so the trader doesn't lose the
-          // dashboard. `noopener,noreferrer` is browser-default
-          // for `_blank` in modern engines, but explicit here
-          // wouldn't hurt — using window.open per the spec.
           onMouseEnter={() => setHovered(idx)}
           onMouseLeave={() => setHovered(null)}
           onClick={() => window.open(a.url, '_blank')}
@@ -134,7 +166,6 @@ export default function NewsFeed() {
             background: isHovered ? '#161616' : 'transparent',
           }}
         >
-          {/* Top line: impact badge (left) + publish time (right). */}
           <div
             style={{
               display: 'flex',
@@ -144,19 +175,10 @@ export default function NewsFeed() {
             }}
           >
             <span style={impactBadgeStyle(a.impact)}>{a.impact}</span>
-            <span
-              style={{
-                color: '#333333',
-                fontSize: '9px',
-                flexShrink: 0,
-              }}
-            >
+            <span style={{ color: '#333333', fontSize: '9px', flexShrink: 0 }}>
               {formatTime(a.publishedAt)}
             </span>
           </div>
-
-          {/* Bottom line: title + source. Title brightens on hover
-              for an at-a-glance "this is what I'm pointing at" cue. */}
           <div style={{ marginTop: '4px' }}>
             <div
               style={{
@@ -193,8 +215,6 @@ export default function NewsFeed() {
         border: '1px solid #222222',
       }}
     >
-      {/* 1. Header — fixed. Left: NEWS label. Right: last update or
-             "——" if we have no successful fetch yet. */}
       <div
         style={{
           display: 'flex',
@@ -219,20 +239,8 @@ export default function NewsFeed() {
         </span>
       </div>
 
-      {/* 2. List — scrolls internally; the parent has overflow:hidden
-             so the scroll bar stays inside this panel. */}
-      <div
-        style={{
-          flex: 1,
-          overflowY: 'auto',
-          padding: 0,
-        }}
-      >
-        {body}
-      </div>
+      <div style={{ flex: 1, overflowY: 'auto', padding: 0 }}>{body}</div>
 
-      {/* 3. Footer — fixed. Article count on the left, refresh
-             cadence hint on the right. Both small and muted. */}
       <div
         style={{
           borderTop: '1px solid #222222',
