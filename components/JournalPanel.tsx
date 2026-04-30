@@ -90,6 +90,7 @@ function DirectionButton({
   }
   return (
     <button
+      className="terminal-btn"
       onClick={onClick}
       style={{
         ...(active ? activeStyle : inactiveStyle),
@@ -218,6 +219,7 @@ function EntryCard({
             style={{ ...inputStyle, flex: 1 }}
           />
           <button
+            className="terminal-btn"
             onClick={() => {
               const n = parseFloat(exitValue)
               if (!Number.isFinite(n)) return
@@ -251,6 +253,7 @@ function EntryCard({
 
       {/* Delete affordance. */}
       <button
+        className="terminal-btn"
         onClick={() => onDelete(entry.id)}
         style={{
           marginTop: '6px',
@@ -354,6 +357,7 @@ export default function JournalPanel({ isOpen, onClose }: JournalPanelProps) {
             TRADE JOURNAL
           </span>
           <button
+            className="terminal-btn"
             onClick={onClose}
             style={{
               background: 'transparent',
@@ -459,6 +463,7 @@ export default function JournalPanel({ isOpen, onClose }: JournalPanelProps) {
 
           {/* Submit. */}
           <button
+            className="terminal-btn"
             onClick={onSubmit}
             style={{ ...buttonStyle, width: '100%' }}
             onMouseEnter={(e) => {

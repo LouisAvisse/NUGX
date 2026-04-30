@@ -21,7 +21,7 @@
 
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useGoldPrice } from '@/lib/hooks/useGoldPrice'
 import { getCurrentSession } from '@/lib/session'
 import { formatPrice, formatChange, formatPct, changeColor } from '@/lib/utils'
@@ -59,6 +59,29 @@ export default function PriceBar() {
   const [isJournalOpen, setIsJournalOpen] = useState(false)
   const [hoverJournal, setHoverJournal] = useState(false)
 
+  // Price flash — when a new tick's price differs from the last,
+  // tint the price block green or red for ~600ms. The first
+  // observed price seeds the ref without flashing (no baseline
+  // to compare against).
+  const prevPriceRef = useRef<number | null>(null)
+  const [flashClass, setFlashClass] = useState('')
+  useEffect(() => {
+    const next = data?.price
+    if (next === undefined || next === null) return
+    if (prevPriceRef.current === null) {
+      prevPriceRef.current = next
+      return
+    }
+    if (next > prevPriceRef.current) {
+      setFlashClass('flash-green')
+    } else if (next < prevPriceRef.current) {
+      setFlashClass('flash-red')
+    }
+    prevPriceRef.current = next
+    const timer = setTimeout(() => setFlashClass(''), 600)
+    return () => clearTimeout(timer)
+  }, [data?.price])
+
   return (
     <>
       <div
@@ -87,12 +110,16 @@ export default function PriceBar() {
         </div>
 
         {/* 2. PRICE — three states. Error wins over loading wins
-            over normal so a recovered fetch shows real data. */}
+            over normal so a recovered fetch shows real data.
+            flashClass is set by the useEffect above to flash-green/
+            flash-red on each tick that changes the price. */}
         <div
+          className={flashClass}
           style={{
             color: data && !error ? '#e5e5e5' : '#444444',
             fontSize: '20px',
             fontWeight: 500,
+            padding: '2px 6px',
           }}
         >
           {error ? (
@@ -192,6 +219,7 @@ export default function PriceBar() {
 
         {/* 9. JOURNAL button */}
         <button
+          className="terminal-btn"
           onClick={() => setIsJournalOpen(true)}
           onMouseEnter={() => setHoverJournal(true)}
           onMouseLeave={() => setHoverJournal(false)}

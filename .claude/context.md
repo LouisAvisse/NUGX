@@ -212,3 +212,4 @@ Everything else: MEDIUM
 - [#20] Trade journal data layer — lib/journal.ts + useJournal hook, localStorage persistence
 - [#21] Trade journal UI — slide-in panel, log form, entry cards, PnL, localStorage persistence
 - [#22] Error states + loading skeletons — shimmer animation, graceful fallbacks in all four components
+- [#23] Micro-interactions — price flash, fade-in on data load, smooth button hover transitions

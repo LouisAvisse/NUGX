@@ -18,6 +18,7 @@
 
 'use client'
 
+import { useEffect, useState } from 'react'
 import { useGoldPrice } from '@/lib/hooks/useGoldPrice'
 import { formatPrice, formatPct, changeColor } from '@/lib/utils'
 
@@ -64,6 +65,14 @@ function Divider() {
 export default function BottomBar() {
   const { data, lastUpdated } = useGoldPrice()
 
+  // Fade-in once on the first successful price tick. After that
+  // hasLoaded stays true so the bar doesn't re-animate on every
+  // poll.
+  const [hasLoaded, setHasLoaded] = useState(false)
+  useEffect(() => {
+    if (data && !hasLoaded) setHasLoaded(true)
+  }, [data, hasLoaded])
+
   // 24h HH:MM:SS, defaults to the trader's local zone (no timeZone
   // option here — the spec wants raw local time).
   const updatedText = lastUpdated
@@ -78,6 +87,7 @@ export default function BottomBar() {
   return (
     <>
       <div
+        className={hasLoaded ? 'fade-in' : ''}
         style={{
           height: '100%',
           display: 'flex',

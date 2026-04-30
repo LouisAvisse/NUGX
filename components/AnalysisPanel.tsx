@@ -121,6 +121,16 @@ export default function AnalysisPanel() {
 
   const [hoverBtn, setHoverBtn] = useState(false)
 
+  // Fade-in on every fresh analysis result. Watching generatedAt
+  // means even an "identical-looking" follow-up still flashes.
+  const [fadeClass, setFadeClass] = useState('')
+  useEffect(() => {
+    if (!data) return
+    setFadeClass('fade-in')
+    const timer = setTimeout(() => setFadeClass(''), 300)
+    return () => clearTimeout(timer)
+  }, [data?.generatedAt])
+
   // Build the analyze payload from current upstream state.
   const buildRequest = useCallback((): AnalysisRequest => {
     return {
@@ -216,8 +226,10 @@ export default function AnalysisPanel() {
         {countdownNode}
       </div>
 
-      {/* Bias block. */}
+      {/* Bias block — flashClass gives a 300ms fade-in on every
+          fresh analysis result (driven by data.generatedAt). */}
       <div
+        className={fadeClass}
         style={{
           padding: '10px 12px',
           borderBottom: '1px solid #222222',
@@ -404,6 +416,7 @@ export default function AnalysisPanel() {
       {/* Action button. RETRY ANALYSIS in error state, otherwise
           RUN ANALYSIS / ANALYZING…. Always enabled in error state. */}
       <button
+        className="terminal-btn"
         onClick={onClickRun}
         disabled={loading}
         onMouseEnter={() => setHoverBtn(true)}

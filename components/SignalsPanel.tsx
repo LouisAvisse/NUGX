@@ -12,6 +12,7 @@
 
 'use client'
 
+import { useEffect, useRef, useState } from 'react'
 import { useSignals } from '@/lib/hooks/useSignals'
 import { getCurrentSession } from '@/lib/session'
 import { formatPct, changeColor } from '@/lib/utils'
@@ -68,12 +69,40 @@ function CellSkeletons() {
   )
 }
 
+// Flash hook — same pattern as PriceBar's price flash. Returns
+// the current flash class string (briefly 'flash-green' /
+// 'flash-red', then cleared) for the watched value.
+function usePriceFlash(value: number | undefined): string {
+  const prevRef = useRef<number | null>(null)
+  const [flashClass, setFlashClass] = useState('')
+  useEffect(() => {
+    if (value === undefined || value === null) return
+    if (prevRef.current === null) {
+      prevRef.current = value
+      return
+    }
+    if (value > prevRef.current) {
+      setFlashClass('flash-green')
+    } else if (value < prevRef.current) {
+      setFlashClass('flash-red')
+    }
+    prevRef.current = value
+    const timer = setTimeout(() => setFlashClass(''), 600)
+    return () => clearTimeout(timer)
+  }, [value])
+  return flashClass
+}
+
 export default function SignalsPanel() {
   const { data, loading, error } = useSignals()
   const session = getCurrentSession()
 
   const dxy = data?.dxy
   const us10y = data?.us10y
+
+  // Flash classes for the DXY and US10Y value cells.
+  const dxyFlash = usePriceFlash(dxy?.price)
+  const us10yFlash = usePriceFlash(us10y?.price)
 
   // Show "UPD HH:MM" once we have a successful fetch, else
   // either UPDATING (loading) or "——" (error).
@@ -141,9 +170,11 @@ export default function SignalsPanel() {
           ) : (
             <>
               <span
+                className={dxyFlash}
                 style={{
                   color: dxy ? inverseValueColor(dxy.change) : '#333333',
                   fontSize: '11px',
+                  padding: '1px 4px',
                 }}
               >
                 {dxy ? dxy.price.toFixed(2) : PLACEHOLDER}
@@ -170,9 +201,11 @@ export default function SignalsPanel() {
           ) : (
             <>
               <span
+                className={us10yFlash}
                 style={{
                   color: us10y ? inverseValueColor(us10y.change) : '#333333',
                   fontSize: '11px',
+                  padding: '1px 4px',
                 }}
               >
                 {us10y ? `${us10y.price.toFixed(2)}%` : PLACEHOLDER}

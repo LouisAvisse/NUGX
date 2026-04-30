@@ -11,7 +11,7 @@
 
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNews } from '@/lib/hooks/useNews'
 import { formatTime } from '@/lib/utils'
 import type { ImpactLevel } from '@/lib/types'
@@ -120,6 +120,16 @@ function CenteredMessage({
 export default function NewsFeed() {
   const { articles, loading, error, lastUpdated } = useNews()
   const [hovered, setHovered] = useState<number | null>(null)
+
+  // Fade-in when articles array length changes — fires on first
+  // load and any subsequent refresh that adds/removes items.
+  const [fadeClass, setFadeClass] = useState('')
+  useEffect(() => {
+    if (articles.length === 0) return
+    setFadeClass('fade-in')
+    const timer = setTimeout(() => setFadeClass(''), 300)
+    return () => clearTimeout(timer)
+  }, [articles.length])
 
   // Pick the right list-body branch.
   let body: React.ReactNode
@@ -239,7 +249,12 @@ export default function NewsFeed() {
         </span>
       </div>
 
-      <div style={{ flex: 1, overflowY: 'auto', padding: 0 }}>{body}</div>
+      <div
+        className={fadeClass}
+        style={{ flex: 1, overflowY: 'auto', padding: 0 }}
+      >
+        {body}
+      </div>
 
       <div
         style={{
