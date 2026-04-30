@@ -203,3 +203,4 @@ Everything else: MEDIUM
 - [#11] TradingViewChart implemented — XAUUSD 1H dark theme, RSI + MACD
 - [#12] SignalsPanel implemented — DXY, US10Y, spread, session volatility
 - [#13] NewsFeed implemented — articles list, impact badges, hover states, scroll
+- [#14] AnalysisPanel implemented — bias, confidence, levels, catalyst, auto-trigger every 30min
