@@ -220,3 +220,4 @@ Everything else: MEDIUM
 - [#29] Calendar stack — /api/calendar via ForexFactory weekly JSON, gold-relevant filter, 45-min trade gate, useCalendar hook 60s polling
 - [#30] News sentiment tagging — bullish/bearish gold keyword lists; sentiment field populated alongside impact in /api/news
 - [#31] AnalysisPanel.buildRequest wired to useTechnicals + useCalendar — analyze body now carries real indicator + calendar values
+- [#32] /api/analyze rebuilt as Marcus Reid confluence engine — 8-signal scoring, IDEAL/AGGRESSIVE/WAIT entry, NOW/RISK/TRIGGER catalyst, invalidation level, market condition, calendar gate forces FLAT
