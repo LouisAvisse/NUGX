@@ -197,3 +197,4 @@ Everything else: MEDIUM
 - [#5] Full file structure scaffolded — all placeholders created
 - [#6] Layout grid implemented — five zones rendering correctly
 - [#7] API route shells with typed mocks — all four routes returning correct shapes
+- [#8] lib/session.ts + lib/utils.ts implemented — helpers ready
