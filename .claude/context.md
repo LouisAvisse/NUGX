@@ -196,3 +196,4 @@ Everything else: MEDIUM
 - [#4] lib/types.ts created — all shared interfaces defined
 - [#5] Full file structure scaffolded — all placeholders created
 - [#6] Layout grid implemented — five zones rendering correctly
+- [#7] API route shells with typed mocks — all four routes returning correct shapes
