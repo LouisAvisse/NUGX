@@ -33,6 +33,11 @@ import Tooltip from '@/components/Tooltip'
 // title and this bar) and the journal-open state is keyboard-
 // driven from the same place. Avoids double-polling and lets
 // the J / ESC shortcuts bypass the JOURNAL button.
+//
+// `isLeftOpen` / `isRightOpen` drive the side-column visibility
+// from the toggle chips that live INSIDE the bar (so the columns
+// can vanish completely as a drawer rather than collapse to a
+// useless 28px strip).
 interface PriceBarProps {
   data: GoldPrice | null
   loading: boolean
@@ -40,6 +45,10 @@ interface PriceBarProps {
   isJournalOpen: boolean
   onJournalToggle: () => void
   onJournalClose: () => void
+  isLeftOpen: boolean
+  isRightOpen: boolean
+  onLeftToggle: () => void
+  onRightToggle: () => void
 }
 
 function sessionColor(name: SessionName): string {
@@ -73,10 +82,16 @@ export default function PriceBar({
   isJournalOpen,
   onJournalToggle,
   onJournalClose,
+  isLeftOpen,
+  isRightOpen,
+  onLeftToggle,
+  onRightToggle,
 }: PriceBarProps) {
   const session = getCurrentSession()
 
   const [hoverJournal, setHoverJournal] = useState(false)
+  const [hoverLeft, setHoverLeft] = useState(false)
+  const [hoverRight, setHoverRight] = useState(false)
 
   // Price flash — when a new tick's price differs from the last,
   // tint the price block green or red for ~600ms. The first
@@ -295,26 +310,93 @@ export default function PriceBar({
           </Tooltip>
         </div>
 
-        {/* 9. JOURNAL button */}
-        <button
-          className="terminal-btn"
-          onClick={onJournalToggle}
-          onMouseEnter={() => setHoverJournal(true)}
-          onMouseLeave={() => setHoverJournal(false)}
+        {/* Panel toggles + JOURNAL — anchored to the right via
+            marginLeft:auto on the FIRST chip, with the rest
+            following at gap:8. Each toggle reads its panel's
+            visibility from a prop and shows it via fg/border
+            contrast: bright + filled bg when the panel is
+            visible, transparent + muted when hidden. Hover
+            adds a brightness step so the chip feels alive. */}
+        <div
           style={{
             marginLeft: 'auto',
-            background: 'transparent',
-            border: `1px solid ${hoverJournal ? '#888888' : '#222222'}`,
-            color: hoverJournal ? '#e5e5e5' : '#888888',
-            fontFamily: 'var(--font-mono)',
-            fontSize: '9px',
-            padding: '3px 8px',
-            cursor: 'pointer',
-            letterSpacing: '0.1em',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
           }}
         >
-          JOURNAL
-        </button>
+          <button
+            className="terminal-btn"
+            onClick={onLeftToggle}
+            onMouseEnter={() => setHoverLeft(true)}
+            onMouseLeave={() => setHoverLeft(false)}
+            aria-pressed={isLeftOpen}
+            aria-label={isLeftOpen ? 'Hide news + calendar' : 'Show news + calendar'}
+            style={{
+              background: isLeftOpen ? '#161616' : 'transparent',
+              border: `1px solid ${
+                isLeftOpen ? '#3a3a3a' : hoverLeft ? '#444444' : '#222222'
+              }`,
+              color: isLeftOpen ? '#f5f5f5' : hoverLeft ? '#c5c5c5' : '#888888',
+              fontFamily: 'var(--font-sans)',
+              fontSize: '9px',
+              padding: '4px 10px',
+              cursor: 'pointer',
+              letterSpacing: '0.1em',
+            }}
+          >
+            NEWS
+          </button>
+
+          <button
+            className="terminal-btn"
+            onClick={onRightToggle}
+            onMouseEnter={() => setHoverRight(true)}
+            onMouseLeave={() => setHoverRight(false)}
+            aria-pressed={isRightOpen}
+            aria-label={isRightOpen ? 'Hide copilot' : 'Show copilot'}
+            style={{
+              background: isRightOpen ? '#161616' : 'transparent',
+              border: `1px solid ${
+                isRightOpen ? '#3a3a3a' : hoverRight ? '#444444' : '#222222'
+              }`,
+              color: isRightOpen ? '#f5f5f5' : hoverRight ? '#c5c5c5' : '#888888',
+              fontFamily: 'var(--font-sans)',
+              fontSize: '9px',
+              padding: '4px 10px',
+              cursor: 'pointer',
+              letterSpacing: '0.1em',
+            }}
+          >
+            COPILOT
+          </button>
+
+          <button
+            className="terminal-btn"
+            onClick={onJournalToggle}
+            onMouseEnter={() => setHoverJournal(true)}
+            onMouseLeave={() => setHoverJournal(false)}
+            aria-pressed={isJournalOpen}
+            style={{
+              background: isJournalOpen ? '#161616' : 'transparent',
+              border: `1px solid ${
+                isJournalOpen ? '#3a3a3a' : hoverJournal ? '#444444' : '#222222'
+              }`,
+              color: isJournalOpen
+                ? '#f5f5f5'
+                : hoverJournal
+                  ? '#c5c5c5'
+                  : '#888888',
+              fontFamily: 'var(--font-sans)',
+              fontSize: '9px',
+              padding: '4px 10px',
+              cursor: 'pointer',
+              letterSpacing: '0.1em',
+            }}
+          >
+            JOURNAL
+          </button>
+        </div>
 
         {/* 10. LIVE indicator */}
         <Tooltip

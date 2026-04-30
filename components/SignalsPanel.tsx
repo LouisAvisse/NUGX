@@ -74,19 +74,22 @@ function usePriceFlash(value: number | undefined): string {
 const PLACEHOLDER = '——'
 
 // Shared chip layout — stacked label on top, value(s) below.
+// Stacked label-on-top, value-below cell. gap:5 (was 1) gives the
+// label real breathing room from the value so chips don't read as
+// crammed. minWidth:0 because chips now live inside a CSS grid
+// (auto-distribute fractional units), not a flex row.
 const chipStyle: React.CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
-  gap: '1px',
-  flexShrink: 0,
-  minWidth: '72px',
+  gap: '5px',
+  minWidth: 0,
 }
 
 const chipLabelStyle: React.CSSProperties = {
-  color: '#888888',
-  fontSize: '8px',
+  color: '#999999',
+  fontSize: '9px',
   textTransform: 'uppercase',
-  letterSpacing: '0.06em',
+  letterSpacing: '0.08em',
   whiteSpace: 'nowrap',
 }
 
@@ -96,19 +99,19 @@ const chipValueRow: React.CSSProperties = {
   display: 'flex',
   flexDirection: 'row',
   alignItems: 'baseline',
-  gap: '4px',
+  gap: '5px',
   whiteSpace: 'nowrap',
 }
 
-// Each row's left-side section label ("MACRO" / "TECHNICAL").
-// Fixed width so the chips line up vertically across both rows.
+// Section label ("MACRO" / "TECHNICAL"). Brighter than before so
+// it reads as a header rather than vestigial scaffolding. Lives
+// in its own grid column on the left of each row.
 const sectionLabelStyle: React.CSSProperties = {
-  color: '#666666',
-  fontSize: '8px',
+  color: '#b0b0b0',
+  fontSize: '9px',
   textTransform: 'uppercase',
-  letterSpacing: '0.12em',
-  width: '64px',
-  flexShrink: 0,
+  letterSpacing: '0.14em',
+  fontWeight: 500,
 }
 
 // Single shimmer bar — drop-in skeleton for any chip.
@@ -173,10 +176,15 @@ export default function SignalsPanel() {
         background: '#111111',
         borderTop: '1px solid #222222',
         borderBottom: '1px solid #222222',
-        padding: '6px 16px',
+        // More vertical breathing room so the chips don't feel
+        // crammed against the panel edges.
+        padding: '12px 20px',
         display: 'flex',
         flexDirection: 'column',
-        gap: '6px',
+        // 14px between MACRO and TECHNICAL rows — large enough to
+        // visually separate the two sections, small enough to keep
+        // the strip ≤120px tall.
+        gap: '14px',
       }}
     >
       {/* Optional error banners — rendered inline above the rows
