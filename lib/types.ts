@@ -102,6 +102,74 @@ export interface TechnicalIndicators {
 }
 
 // ─────────────────────────────────────────────────────────────────
+// Chart series + AI levels
+// Consumed by GoldChart (components/TradingViewChart.tsx) — the
+// Lightweight Charts panel. Series ship from /api/technicals so
+// the heavy `technicalindicators` package never enters the
+// browser bundle. AI levels flow from AnalysisPanel up to page.tsx
+// then back down into GoldChart as horizontal price lines.
+// ─────────────────────────────────────────────────────────────────
+
+// One OHLCV candle in Lightweight Charts' expected shape.
+// `time` is a UTC timestamp in seconds since epoch (the library's
+// UTCTimestamp form). `volume` is included for the histogram
+// series at the bottom of the price panel.
+export interface ChartCandle {
+  time: number
+  open: number
+  high: number
+  low: number
+  close: number
+  volume: number
+}
+
+// One point on a line series (EMA20/50/200). Uses the same time
+// format as ChartCandle so price + EMA series share an X axis.
+export interface ChartLinePoint {
+  time: number
+  value: number
+}
+
+// Bundled chart payload — raw candle history + the three EMA
+// overlays computed server-side. The client never recomputes
+// indicators; it just renders what arrives.
+export interface ChartSeries {
+  candles: ChartCandle[]
+  ema20: ChartLinePoint[]
+  ema50: ChartLinePoint[]
+  ema200: ChartLinePoint[]
+}
+
+// Top-level shape of the /api/technicals response — indicators
+// snapshot + chart series for the GoldChart component.
+// (Pre-[#50] the route returned the indicators object directly;
+// the hook + route were updated together.)
+export interface TechnicalsResponse {
+  indicators: TechnicalIndicators
+  chart: ChartSeries
+}
+
+// AI levels overlaid on the GoldChart as horizontal price lines.
+// All fields optional — the chart redraws on every `levels` prop
+// change and only renders lines for fields that resolve to a
+// finite number greater than zero.
+//
+// Populated by AnalysisPanel after every successful analysis run:
+// entry/stop/target/resistance/support are parsed from the model's
+// string output (e.g. "3281-3284" → 3281), while swingHigh /
+// swingLow piggyback off useTechnicals so the chart can show
+// recent structure even before the first analysis fires.
+export interface ChartLevels {
+  entry?: number
+  stop?: number
+  target?: number
+  resistance?: number
+  support?: number
+  swingHigh?: number
+  swingLow?: number
+}
+
+// ─────────────────────────────────────────────────────────────────
 // News
 // Returned by /api/news; consumed by useNews + NewsFeed.
 // ─────────────────────────────────────────────────────────────────

@@ -35,6 +35,7 @@ import { getCurrentSession } from '@/lib/session'
 import type {
   AnalysisRequest,
   Bias,
+  ChartLevels,
   Confidence,
   EntryType,
   MarketCondition,
@@ -378,11 +379,35 @@ function SignalRow({
   )
 }
 
+// Parse the first finite number out of a level string.
+// Marcus Reid's confluence engine emits levels as ranges
+// ("3281-3284"), single values ("3265"), or notes with prefixes
+// ("above 3300"). The chart only needs ONE numeric anchor per
+// level — we grab whichever number appears first. Returns
+// undefined when nothing parseable is found so the chart can
+// skip the line entirely.
+function parseFirstNumber(s: string | undefined): number | undefined {
+  if (!s) return undefined
+  const m = s.match(/-?\d+(?:\.\d+)?/)
+  if (!m) return undefined
+  const n = parseFloat(m[0])
+  return Number.isFinite(n) ? n : undefined
+}
+
 // ─────────────────────────────────────────────────────────────────
 // Main component
 // ─────────────────────────────────────────────────────────────────
 
-export default function AnalysisPanel() {
+interface AnalysisPanelProps {
+  // Optional — page.tsx passes a setter so the GoldChart can
+  // overlay the AI's entry/stop/target/resistance/support as
+  // horizontal price lines after every successful analysis run.
+  // swingHigh/swingLow piggyback off the technicals hook so the
+  // chart shows recent structure even before the first analysis.
+  onLevelsUpdate?: (levels: ChartLevels) => void
+}
+
+export default function AnalysisPanel({ onLevelsUpdate }: AnalysisPanelProps = {}) {
   const analysis = useAnalysis()
   const goldPrice = useGoldPrice()
   const signals = useSignals()
@@ -401,6 +426,30 @@ export default function AnalysisPanel() {
     const timer = setTimeout(() => setFadeClass(''), 300)
     return () => clearTimeout(timer)
   }, [data?.generatedAt])
+
+  // Push the parsed AI levels up to page.tsx → GoldChart. Fires
+  // on every fresh `data.generatedAt` (i.e. every successful
+  // analysis), and also re-fires when the technicals indicators
+  // refresh so swingHigh/swingLow stay in sync with the latest
+  // 20-candle structure.
+  useEffect(() => {
+    if (!onLevelsUpdate) return
+    if (!data) return
+    onLevelsUpdate({
+      entry: parseFirstNumber(data.entry),
+      stop: parseFirstNumber(data.stop),
+      target: parseFirstNumber(data.target),
+      resistance: parseFirstNumber(data.resistance),
+      support: parseFirstNumber(data.support),
+      swingHigh: technicals.indicators?.swingHigh,
+      swingLow: technicals.indicators?.swingLow,
+    })
+  }, [
+    data?.generatedAt,
+    data,
+    technicals.indicators,
+    onLevelsUpdate,
+  ])
 
   // Build the analyze payload from current upstream state.
   const buildRequest = useCallback((): AnalysisRequest => {

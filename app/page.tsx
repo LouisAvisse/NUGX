@@ -28,7 +28,7 @@
 
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import PriceBar from '@/components/PriceBar'
 import TradingViewChart from '@/components/TradingViewChart'
 import AnalysisPanel from '@/components/AnalysisPanel'
@@ -39,6 +39,7 @@ import BottomBar from '@/components/BottomBar'
 import { useGoldPrice } from '@/lib/hooks/useGoldPrice'
 import { useBreakpoint } from '@/lib/hooks/useBreakpoint'
 import { formatPrice } from '@/lib/utils'
+import type { ChartLevels } from '@/lib/types'
 
 export default function Page() {
   const goldPrice = useGoldPrice()
@@ -54,6 +55,19 @@ export default function Page() {
   // visible (the order property does the rearranging).
   const [isLeftOpen, setIsLeftOpen] = useState(true)
   const [isRightOpen, setIsRightOpen] = useState(true)
+
+  // AI levels lifted from AnalysisPanel so GoldChart can overlay
+  // entry/stop/target/resistance/support as horizontal price
+  // lines. AnalysisPanel calls setChartLevels after each
+  // successful analysis run; GoldChart redraws when the prop
+  // identity changes. useCallback stabilizes the setter so the
+  // child effect doesn't re-fire on every render.
+  const [chartLevels, setChartLevels] = useState<ChartLevels | undefined>(
+    undefined
+  )
+  const handleLevelsUpdate = useCallback((levels: ChartLevels) => {
+    setChartLevels(levels)
+  }, [])
 
   const showLeft = isStacked ? true : isLeftOpen
   const showRight = isStacked ? true : isRightOpen
@@ -210,7 +224,7 @@ export default function Page() {
             order: isStacked ? 1 : 0,
           }}
         >
-          <TradingViewChart />
+          <TradingViewChart levels={chartLevels} />
         </div>
 
         {/* RIGHT drawer — Copilot AnalysisPanel. */}
@@ -235,7 +249,7 @@ export default function Page() {
             order: isStacked ? 2 : 0,
           }}
         >
-          {showRight && <AnalysisPanel />}
+          {showRight && <AnalysisPanel onLevelsUpdate={handleLevelsUpdate} />}
         </div>
       </div>
 

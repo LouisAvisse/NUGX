@@ -1,26 +1,36 @@
-// GET /api/technicals — XAU/USD technical indicators on 1H candles.
+// GET /api/technicals — XAU/USD technical indicators on 1H candles
+// PLUS raw OHLCV + EMA series for the GoldChart panel.
 //
-// Pulls ~30 days of hourly candles for XAUUSD=X via yahoo-finance2,
+// Pulls ~30 days of hourly candles for GC=F via yahoo-finance2,
 // passes the close/high/low arrays + current spot to
-// computeIndicators in lib/technicals.ts, and returns the full
-// TechnicalIndicators payload from lib/types.ts.
+// computeIndicators in lib/technicals.ts, AND ships the raw
+// candle array + three EMA series back to the client so the
+// Lightweight Charts panel never has to recompute indicators in
+// the browser.
 //
 // SERVER-SIDE ONLY (yahoo-finance2 + technicalindicators).
 // Failure handling: any error returns FALLBACK with HTTP 200 so
 // the client never crashes; SignalsPanel TECHNICAL section just
-// shows its "——" placeholders.
+// shows its "——" placeholders, GoldChart renders an empty chart.
 
 import { NextResponse } from 'next/server'
 import YahooFinance from 'yahoo-finance2'
+import { EMA } from 'technicalindicators'
 import { computeIndicators } from '@/lib/technicals'
-import type { TechnicalIndicators } from '@/lib/types'
+import type {
+  ChartCandle,
+  ChartLinePoint,
+  ChartSeries,
+  TechnicalIndicators,
+  TechnicalsResponse,
+} from '@/lib/types'
 
 // Single shared instance — same pattern as /api/signals.
 const yahooFinance = new YahooFinance()
 
 // Stable, typed safe-default. RSI 50, trend RANGING, all bands
 // at zero — the panel treats these as "unknown" / "no signal".
-const FALLBACK: TechnicalIndicators = {
+const FALLBACK_INDICATORS: TechnicalIndicators = {
   ema20: 0,
   ema50: 0,
   ema200: 0,
@@ -42,6 +52,19 @@ const FALLBACK: TechnicalIndicators = {
   priceVsEma200: 'ABOVE',
 }
 
+// Empty chart payload — GoldChart simply renders nothing.
+const FALLBACK_CHART: ChartSeries = {
+  candles: [],
+  ema20: [],
+  ema50: [],
+  ema200: [],
+}
+
+const FALLBACK: TechnicalsResponse = {
+  indicators: FALLBACK_INDICATORS,
+  chart: FALLBACK_CHART,
+}
+
 // Minimal candle shape we read from the chart() response. yahoo-
 // finance2's typed return narrows weirdly through the library's
 // option overloads, so we cast through `unknown` to a tight
@@ -58,6 +81,32 @@ interface YahooCandle {
 // 30 days of history. EMA200 needs 200 readings; 30 × 24 = 720
 // hourly candles is plenty of headroom.
 const HISTORY_DAYS = 30
+
+// Convert Yahoo's date (Date | ISO string | epoch ms number) to
+// the UTCTimestamp form Lightweight Charts expects (seconds
+// since epoch, integer).
+function toUtcSeconds(d: Date | string | number): number {
+  return Math.floor(new Date(d).getTime() / 1000)
+}
+
+// Pair an EMA value array with its corresponding candle times.
+// `EMA.calculate({ period, values })` returns N - period + 1
+// values (no output until enough history exists), so the i-th
+// EMA value lines up with the (i + period - 1)-th candle.
+function alignEmaToCandles(
+  values: number[],
+  candles: ChartCandle[],
+  period: number
+): ChartLinePoint[] {
+  const offset = period - 1
+  const out: ChartLinePoint[] = []
+  for (let i = 0; i < values.length; i++) {
+    const candle = candles[i + offset]
+    if (!candle) continue
+    out.push({ time: candle.time, value: values[i] })
+  }
+  return out
+}
 
 export async function GET() {
   try {
@@ -86,7 +135,7 @@ export async function GET() {
     }
 
     // Drop any candle that's missing a required OHLC field (rare
-    // but happens around session boundaries). chronological order
+    // but happens around session boundaries). Chronological order
     // is preserved.
     const cleaned = quotes.filter(
       (q): q is YahooCandle & {
@@ -105,10 +154,48 @@ export async function GET() {
       throw new Error('All candles missing OHLC fields')
     }
 
-    const closes = cleaned.map((q) => q.close)
-    const highs = cleaned.map((q) => q.high)
-    const lows = cleaned.map((q) => q.low)
-    const last = cleaned[cleaned.length - 1]
+    // Build the raw candle series first — single source of truth
+    // for both the chart payload AND the indicator math below.
+    // De-duplicate timestamps (Yahoo occasionally returns two
+    // candles at the same hour around DST transitions); keep the
+    // last one. Lightweight Charts requires strictly ascending,
+    // unique times or it throws.
+    const seen = new Set<number>()
+    const candles: ChartCandle[] = []
+    for (const q of cleaned) {
+      const time = toUtcSeconds(q.date)
+      // Last-write-wins on duplicate times: replace the prior
+      // candle in place rather than appending.
+      if (seen.has(time)) {
+        const idx = candles.findIndex((c) => c.time === time)
+        if (idx >= 0) {
+          candles[idx] = {
+            time,
+            open: q.open,
+            high: q.high,
+            low: q.low,
+            close: q.close,
+            volume: q.volume ?? 0,
+          }
+        }
+        continue
+      }
+      seen.add(time)
+      candles.push({
+        time,
+        open: q.open,
+        high: q.high,
+        low: q.low,
+        close: q.close,
+        volume: q.volume ?? 0,
+      })
+    }
+    candles.sort((a, b) => a.time - b.time)
+
+    const closes = candles.map((c) => c.close)
+    const highs = candles.map((c) => c.high)
+    const lows = candles.map((c) => c.low)
+    const last = candles[candles.length - 1]
 
     // Spot price + day high/low — we use the last candle's close
     // as spot and compute the day range from candles dated within
@@ -120,17 +207,16 @@ export async function GET() {
     const price = last.close
 
     // Day range from candles in the last 24 hours.
-    const cutoff = period2.getTime() - 24 * 3600 * 1000
-    const dayCandles = cleaned.filter(
-      (q) => new Date(q.date).getTime() >= cutoff
-    )
+    const cutoffSec = Math.floor(period2.getTime() / 1000) - 24 * 3600
+    const dayCandles = candles.filter((c) => c.time >= cutoffSec)
     const dayHigh = dayCandles.length
-      ? Math.max(...dayCandles.map((q) => q.high))
+      ? Math.max(...dayCandles.map((c) => c.high))
       : last.high
     const dayLow = dayCandles.length
-      ? Math.min(...dayCandles.map((q) => q.low))
+      ? Math.min(...dayCandles.map((c) => c.low))
       : last.low
 
+    // Indicators (used by SignalsPanel + AnalysisPanel buildRequest).
     const indicators = computeIndicators({
       closes,
       highs,
@@ -140,7 +226,21 @@ export async function GET() {
       dayLow,
     })
 
-    return NextResponse.json(indicators)
+    // EMA series for the GoldChart overlay. Computed once here so
+    // the client doesn't import technicalindicators.
+    const ema20Values = EMA.calculate({ period: 20, values: closes })
+    const ema50Values = EMA.calculate({ period: 50, values: closes })
+    const ema200Values = EMA.calculate({ period: 200, values: closes })
+
+    const chart: ChartSeries = {
+      candles,
+      ema20: alignEmaToCandles(ema20Values, candles, 20),
+      ema50: alignEmaToCandles(ema50Values, candles, 50),
+      ema200: alignEmaToCandles(ema200Values, candles, 200),
+    }
+
+    const response: TechnicalsResponse = { indicators, chart }
+    return NextResponse.json(response)
   } catch (err) {
     console.error('[/api/technicals] fetch failed:', err)
     return NextResponse.json(FALLBACK, { status: 200 })
