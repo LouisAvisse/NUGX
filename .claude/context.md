@@ -205,3 +205,4 @@ Everything else: MEDIUM
 - [#13] NewsFeed implemented — articles list, impact badges, hover states, scroll
 - [#14] AnalysisPanel implemented — bias, confidence, levels, catalyst, auto-trigger every 30min
 - [#15] BottomBar implemented — open, prev close, change, high/low, 52W levels, timestamp
+- [#16] Real gold price wired — gold-api.com, fallback on error, no caching
