@@ -192,3 +192,4 @@ Everything else: MEDIUM
 - [INIT] context.md created — project fully specced, ready to build
 - [#1] Next.js 15 scaffolded — clean default project, no modifications
 - [#2] Dependencies installed — geist, yahoo-finance2, @anthropic-ai/sdk
+- [#3] Global styles + Geist Mono font configured
