@@ -1,103 +1,98 @@
-import Image from "next/image";
+// Dashboard root — pure layout shell.
+// Five zones, no data, no logic:
+//   1. Top bar          (PriceBar)        — fixed 48px, dark panel
+//   2. Center chart     (TradingViewChart)— flex-1 of the middle row
+//   3. Right column     (AnalysisPanel +  — fixed 300px wide
+//                        SignalsPanel +
+//                        NewsFeed)
+//   4. Bottom bar       (BottomBar)       — fixed 36px, dark panel
+// `'use client'` is set because the upcoming polling hooks
+// (useGoldPrice / useSignals / useNews / useAnalysis) will run in
+// the browser; declaring the boundary here keeps every dashboard
+// child component on the client side.
 
-export default function Home() {
+'use client'
+
+import PriceBar from '@/components/PriceBar'
+import TradingViewChart from '@/components/TradingViewChart'
+import AnalysisPanel from '@/components/AnalysisPanel'
+import SignalsPanel from '@/components/SignalsPanel'
+import NewsFeed from '@/components/NewsFeed'
+import BottomBar from '@/components/BottomBar'
+
+export default function Page() {
   return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+    // Full-viewport flex column. `overflow: hidden` clips any
+    // accidental child overflow so the inner panels can manage
+    // their own scrolling (NewsFeed in particular).
+    <main style={{
+      height: '100vh',
+      width: '100vw',
+      overflow: 'hidden',
+      display: 'flex',
+      flexDirection: 'column',
+      background: '#0a0a0a',
+    }}>
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+      {/* Top bar — fixed 48px, panel bg #111, divider #222. */}
+      <div style={{
+        height: '48px',
+        minHeight: '48px',
+        background: '#111111',
+        borderBottom: '1px solid #222222',
+      }}>
+        <PriceBar />
+      </div>
+
+      {/* Middle row — fills remaining height; chart left, sidebar right. */}
+      <div style={{
+        flex: 1,
+        display: 'flex',
+        overflow: 'hidden',
+      }}>
+
+        {/* Chart — takes all remaining width. */}
+        <div style={{ flex: 1, overflow: 'hidden' }}>
+          <TradingViewChart />
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
-  );
+
+        {/* Right column — fixed 300px. AnalysisPanel and SignalsPanel
+            stay at their natural height (flexShrink:0); NewsFeed
+            takes the leftover space and scrolls internally. */}
+        <div style={{
+          width: '300px',
+          minWidth: '300px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '2px',
+          padding: '2px',
+          background: '#0a0a0a',
+          borderLeft: '1px solid #222222',
+          overflow: 'hidden',
+        }}>
+          <div style={{ flexShrink: 0 }}>
+            <AnalysisPanel />
+          </div>
+          <div style={{ flexShrink: 0 }}>
+            <SignalsPanel />
+          </div>
+          <div style={{ flex: 1, overflow: 'hidden' }}>
+            <NewsFeed />
+          </div>
+        </div>
+
+      </div>
+
+      {/* Bottom bar — fixed 36px, panel bg #111, divider #222. */}
+      <div style={{
+        height: '36px',
+        minHeight: '36px',
+        background: '#111111',
+        borderTop: '1px solid #222222',
+      }}>
+        <BottomBar />
+      </div>
+
+    </main>
+  )
 }
