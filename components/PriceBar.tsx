@@ -45,8 +45,8 @@ interface PriceBarProps {
 function sessionColor(name: SessionName): string {
   if (name === 'NY/London Overlap') return '#fbbf24'
   if (name === 'London' || name === 'New York') return '#60a5fa'
-  if (name === 'Tokyo') return '#888888'
-  return '#444444'
+  if (name === 'Tokyo') return '#b0b0b0'
+  return '#888888'
 }
 
 const PLACEHOLDER = '——'
@@ -113,6 +113,37 @@ export default function PriceBar({
           background: 'transparent',
         }}
       >
+        {/* 0. NUGX BRAND — product wordmark anchoring the left
+            edge. Bright #f5f5f5, slightly heavier weight, large
+            letter-spacing so it reads as a logo, not a label.
+            Vertical divider follows to separate brand from data. */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+          }}
+        >
+          <span
+            style={{
+              color: '#f5f5f5',
+              fontSize: '15px',
+              fontWeight: 600,
+              letterSpacing: '0.18em',
+              fontFeatureSettings: '"ss01"',
+            }}
+          >
+            NUGX
+          </span>
+          <div
+            style={{
+              width: '1px',
+              height: '20px',
+              background: '#222222',
+            }}
+          />
+        </div>
+
         {/* 1. SYMBOL — both lines wrapped in tooltips with the
             ISO-code / spot-price explanations from the spec. */}
         <div style={{ display: 'flex', flexDirection: 'column' }}>
@@ -122,7 +153,7 @@ export default function PriceBar({
           >
             <span
               style={{
-                color: '#444444',
+                color: '#888888',
                 fontSize: '9px',
                 textTransform: 'uppercase',
                 letterSpacing: '0.1em',
@@ -135,7 +166,7 @@ export default function PriceBar({
             position="bottom"
             content="Spot price = current market price for immediate delivery. Different from futures which settle at a later date. This is the real-time trading price."
           >
-            <span style={{ color: '#333333', fontSize: '8px' }}>
+            <span style={{ color: '#666666', fontSize: '8px' }}>
               GOLD SPOT
             </span>
           </Tooltip>
@@ -148,7 +179,7 @@ export default function PriceBar({
         <div
           className={flashClass}
           style={{
-            color: data && !error ? '#e5e5e5' : '#444444',
+            color: data && !error ? '#e5e5e5' : '#888888',
             fontSize: '20px',
             fontWeight: 500,
             padding: '2px 6px',
@@ -170,7 +201,7 @@ export default function PriceBar({
         {/* 3. CHANGE */}
         <div style={{ display: 'flex', flexDirection: 'column' }}>
           {error ? (
-            <span style={{ color: '#333333', fontSize: '12px' }}>
+            <span style={{ color: '#666666', fontSize: '12px' }}>
               {PLACEHOLDER}
             </span>
           ) : loading && !data ? (
@@ -178,7 +209,7 @@ export default function PriceBar({
           ) : (
             <span
               style={{
-                color: data ? changeColor(data.change) : '#444444',
+                color: data ? changeColor(data.change) : '#888888',
                 fontSize: '12px',
               }}
             >
@@ -198,10 +229,10 @@ export default function PriceBar({
             position="bottom"
             content="Session high — the highest price gold has reached today. Acts as intraday resistance. A breakout above this level is a bullish signal."
           >
-            <span style={{ color: '#444444', fontSize: '9px' }}>H</span>
+            <span style={{ color: '#888888', fontSize: '9px' }}>H</span>
           </Tooltip>
           {error ? (
-            <span style={{ color: '#333333', fontSize: '11px' }}>
+            <span style={{ color: '#666666', fontSize: '11px' }}>
               {PLACEHOLDER}
             </span>
           ) : loading && !data ? (
@@ -219,10 +250,10 @@ export default function PriceBar({
             position="bottom"
             content="Session low — the lowest price gold has reached today. Acts as intraday support. A breakdown below this level is a bearish signal."
           >
-            <span style={{ color: '#444444', fontSize: '9px' }}>L</span>
+            <span style={{ color: '#888888', fontSize: '9px' }}>L</span>
           </Tooltip>
           {error ? (
-            <span style={{ color: '#333333', fontSize: '11px' }}>
+            <span style={{ color: '#666666', fontSize: '11px' }}>
               {PLACEHOLDER}
             </span>
           ) : loading && !data ? (
@@ -273,8 +304,8 @@ export default function PriceBar({
           style={{
             marginLeft: 'auto',
             background: 'transparent',
-            border: `1px solid ${hoverJournal ? '#444444' : '#222222'}`,
-            color: hoverJournal ? '#e5e5e5' : '#444444',
+            border: `1px solid ${hoverJournal ? '#888888' : '#222222'}`,
+            color: hoverJournal ? '#e5e5e5' : '#888888',
             fontFamily: 'var(--font-mono)',
             fontSize: '9px',
             padding: '3px 8px',
@@ -301,7 +332,7 @@ export default function PriceBar({
             </span>
             <span
               style={{
-                color: '#444444',
+                color: '#888888',
                 fontSize: '9px',
                 letterSpacing: '0.1em',
               }}

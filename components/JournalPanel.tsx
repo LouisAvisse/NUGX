@@ -38,7 +38,7 @@ interface JournalPanelProps {
 
 // Tiny uppercase label tone — reused for every form/cell label.
 const labelStyle: React.CSSProperties = {
-  color: '#444444',
+  color: '#888888',
   fontSize: '8px',
   textTransform: 'uppercase',
   letterSpacing: '0.05em',
@@ -59,7 +59,7 @@ const inputStyle: React.CSSProperties = {
 const buttonStyle: React.CSSProperties = {
   background: 'transparent',
   border: '1px solid #2a2a2a',
-  color: '#666666',
+  color: '#999999',
   fontFamily: 'var(--font-mono)',
   fontSize: '10px',
   letterSpacing: '0.1em',
@@ -85,7 +85,7 @@ function DirectionButton({
     : { background: '#1f0a0a', color: '#f87171', border: '1px solid #4a1a1a' }
   const inactiveStyle: React.CSSProperties = {
     background: 'transparent',
-    color: '#444444',
+    color: '#888888',
     border: '1px solid #222222',
   }
   return (
@@ -139,7 +139,7 @@ function EntryCard({
         >
           {entry.direction === 'LONG' ? '▲ LONG' : '▼ SHORT'}
         </span>
-        <span style={{ color: '#444444', fontSize: '9px' }}>
+        <span style={{ color: '#888888', fontSize: '9px' }}>
           {entry.session}
         </span>
       </div>
@@ -247,7 +247,7 @@ function EntryCard({
       )}
 
       {/* Created timestamp. */}
-      <div style={{ marginTop: '6px', color: '#333333', fontSize: '8px' }}>
+      <div style={{ marginTop: '6px', color: '#666666', fontSize: '8px' }}>
         {formatDateTime(entry.createdAt)}
       </div>
 
@@ -259,7 +259,7 @@ function EntryCard({
           marginTop: '6px',
           background: 'transparent',
           border: 'none',
-          color: '#333333',
+          color: '#666666',
           fontSize: '8px',
           fontFamily: 'var(--font-mono)',
           cursor: 'pointer',
@@ -362,13 +362,13 @@ export default function JournalPanel({ isOpen, onClose }: JournalPanelProps) {
             style={{
               background: 'transparent',
               border: 'none',
-              color: '#444444',
+              color: '#888888',
               fontSize: '14px',
               cursor: 'pointer',
               fontFamily: 'var(--font-mono)',
             }}
             onMouseEnter={(e) => (e.currentTarget.style.color = '#e5e5e5')}
-            onMouseLeave={(e) => (e.currentTarget.style.color = '#444444')}
+            onMouseLeave={(e) => (e.currentTarget.style.color = '#888888')}
           >
             ✕
           </button>
@@ -467,12 +467,12 @@ export default function JournalPanel({ isOpen, onClose }: JournalPanelProps) {
             onClick={onSubmit}
             style={{ ...buttonStyle, width: '100%' }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.borderColor = '#444444'
+              e.currentTarget.style.borderColor = '#888888'
               e.currentTarget.style.color = '#e5e5e5'
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.borderColor = '#2a2a2a'
-              e.currentTarget.style.color = '#666666'
+              e.currentTarget.style.color = '#999999'
             }}
           >
             LOG TRADE +
@@ -485,7 +485,7 @@ export default function JournalPanel({ isOpen, onClose }: JournalPanelProps) {
             <div
               style={{
                 padding: '24px 16px',
-                color: '#333333',
+                color: '#666666',
                 fontSize: '10px',
                 textAlign: 'center',
               }}
@@ -514,7 +514,7 @@ export default function JournalPanel({ isOpen, onClose }: JournalPanelProps) {
             flexShrink: 0,
           }}
         >
-          <span style={{ color: '#333333', fontSize: '9px' }}>
+          <span style={{ color: '#666666', fontSize: '9px' }}>
             {entries.length} TRADES LOGGED
           </span>
           <span style={{ color: '#222222', fontSize: '8px' }}>

@@ -91,7 +91,7 @@ export default function TradingViewChart() {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            color: '#333333',
+            color: '#666666',
             fontSize: '11px',
             letterSpacing: '0.15em',
           }}

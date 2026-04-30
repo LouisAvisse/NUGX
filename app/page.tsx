@@ -208,7 +208,7 @@ export default function Page() {
               style={{
                 background: '#161616',
                 border: '1px solid #222222',
-                color: '#444444',
+                color: '#888888',
                 fontSize: '8px',
                 padding: '1px 5px',
                 letterSpacing: '0.05em',
@@ -218,7 +218,7 @@ export default function Page() {
             </span>
             <span
               style={{
-                color: '#333333',
+                color: '#666666',
                 fontSize: '8px',
                 letterSpacing: '0.08em',
                 textTransform: 'uppercase',

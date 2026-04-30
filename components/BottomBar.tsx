@@ -35,7 +35,7 @@ const blockStyle: React.CSSProperties = {
 
 // Tiny uppercase label tone shared by every stat.
 const labelStyle: React.CSSProperties = {
-  color: '#444444',
+  color: '#888888',
   fontSize: '8px',
   textTransform: 'uppercase',
   letterSpacing: '0.08em',
@@ -109,7 +109,7 @@ export default function BottomBar() {
           <span
             style={{
               ...valueStyle,
-              color: data ? '#e5e5e5' : '#333333',
+              color: data ? '#e5e5e5' : '#666666',
             }}
           >
             {data ? formatPrice(data.open) : PLACEHOLDER}
@@ -125,7 +125,7 @@ export default function BottomBar() {
           <span
             style={{
               ...valueStyle,
-              color: data ? '#e5e5e5' : '#333333',
+              color: data ? '#e5e5e5' : '#666666',
             }}
           >
             {data ? formatPrice(data.prevClose) : PLACEHOLDER}
@@ -142,7 +142,7 @@ export default function BottomBar() {
           <span
             style={{
               ...valueStyle,
-              color: data ? changeColor(data.change) : '#333333',
+              color: data ? changeColor(data.change) : '#666666',
             }}
           >
             {data
@@ -158,7 +158,7 @@ export default function BottomBar() {
           <span
             style={{
               ...valueStyle,
-              color: data ? '#4ade80' : '#333333',
+              color: data ? '#4ade80' : '#666666',
             }}
           >
             {data ? formatPrice(data.high) : PLACEHOLDER}
@@ -172,7 +172,7 @@ export default function BottomBar() {
           <span
             style={{
               ...valueStyle,
-              color: data ? '#f87171' : '#333333',
+              color: data ? '#f87171' : '#666666',
             }}
           >
             {data ? formatPrice(data.low) : PLACEHOLDER}
@@ -208,7 +208,7 @@ export default function BottomBar() {
           <span
             style={{
               ...valueStyle,
-              color: lastUpdated ? '#444444' : '#333333',
+              color: lastUpdated ? '#888888' : '#666666',
             }}
           >
             {updatedText}

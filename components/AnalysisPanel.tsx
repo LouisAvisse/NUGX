@@ -58,7 +58,7 @@ function recDisplay(r: Recommendation): {
 } {
   if (r === 'LONG') return { color: '#4ade80', glyph: '▲', text: 'LONG' }
   if (r === 'SHORT') return { color: '#f87171', glyph: '▼', text: 'SHORT' }
-  return { color: '#888888', glyph: '◆', text: 'FLAT' }
+  return { color: '#b0b0b0', glyph: '◆', text: 'FLAT' }
 }
 
 // Bias badge palette — used by the small badge in the
@@ -108,7 +108,7 @@ function entryTypeDisplay(t: EntryType): {
     text: '○ WAIT FOR SETUP',
     style: {
       background: '#161616',
-      color: '#888888',
+      color: '#b0b0b0',
       border: '1px solid #2a2a2a',
     },
   }
@@ -124,7 +124,7 @@ function marketConditionDisplay(c: MarketCondition): {
   if (c === 'TRENDING_DOWN') return { text: '▼ TRENDING', color: '#f87171' }
   if (c === 'BREAKOUT_WATCH')
     return { text: '◎ BREAKOUT WATCH', color: '#fbbf24' }
-  return { text: '◆ RANGING', color: '#888888' }
+  return { text: '◆ RANGING', color: '#b0b0b0' }
 }
 
 // R:R color tier — green ≥1:2, amber ≥1:1.5, red below.
@@ -151,7 +151,7 @@ function confluenceColor(score: number): string {
 function signalDotColor(b: Bias): string {
   if (b === 'BULLISH') return '#4ade80'
   if (b === 'BEARISH') return '#f87171'
-  return '#888888'
+  return '#b0b0b0'
 }
 function signalShortText(b: Bias): string {
   if (b === 'BULLISH') return 'BULL'
@@ -215,7 +215,7 @@ function parseCatalyst(catalyst: string): {
 
 // Shared label tone — tiny uppercase muted labels.
 const labelStyle: React.CSSProperties = {
-  color: '#444444',
+  color: '#888888',
   fontSize: '8px',
   textTransform: 'uppercase',
 }
@@ -265,7 +265,7 @@ function ParamCell({
       ) : (
         <div
           style={{
-            color: value ? color : '#333333',
+            color: value ? color : '#666666',
             fontSize: '11px',
             fontWeight: 500,
             marginTop: '2px',
@@ -298,7 +298,7 @@ function SignalRow({
         }}
       >
         <span style={{ ...labelStyle, fontSize: '8px' }}>{label}</span>
-        <span style={{ color: '#333333', fontSize: '8px' }}>——</span>
+        <span style={{ color: '#666666', fontSize: '8px' }}>——</span>
       </div>
     )
   }
@@ -449,13 +449,13 @@ export default function AnalysisPanel() {
     )
   } else if (data) {
     countdownNode = (
-      <span style={{ color: '#333333', fontSize: '9px' }}>
+      <span style={{ color: '#666666', fontSize: '9px' }}>
         {formatCountdown(secondsUntilNext)}
       </span>
     )
   } else {
     countdownNode = (
-      <span style={{ color: '#333333', fontSize: '9px' }}>——</span>
+      <span style={{ color: '#666666', fontSize: '9px' }}>——</span>
     )
   }
 
@@ -509,7 +509,7 @@ export default function AnalysisPanel() {
         >
           <span
             style={{
-              color: '#444444',
+              color: '#888888',
               fontSize: '9px',
               textTransform: 'uppercase',
               letterSpacing: '0.12em',
@@ -570,7 +570,7 @@ export default function AnalysisPanel() {
             <Skeleton width={140} height={28} />
           ) : showError ? (
             <span
-              style={{ color: '#333333', fontSize: '28px', fontWeight: 500 }}
+              style={{ color: '#666666', fontSize: '28px', fontWeight: 500 }}
             >
               ——
             </span>
@@ -587,7 +587,7 @@ export default function AnalysisPanel() {
             </span>
           ) : (
             <span
-              style={{ color: '#333333', fontSize: '28px', fontWeight: 500 }}
+              style={{ color: '#666666', fontSize: '28px', fontWeight: 500 }}
             >
               ——
             </span>
@@ -600,12 +600,12 @@ export default function AnalysisPanel() {
             ) : data && !showError ? (
               <span style={biasBadgeStyle(data.bias)}>{data.bias}</span>
             ) : (
-              <span style={{ color: '#333333', fontSize: '9px' }}>——</span>
+              <span style={{ color: '#666666', fontSize: '9px' }}>——</span>
             )}
             {data && !showError && (
               <span
                 style={{
-                  color: '#444444',
+                  color: '#888888',
                   fontSize: '8px',
                   textAlign: 'right',
                   letterSpacing: '0.08em',
@@ -628,7 +628,7 @@ export default function AnalysisPanel() {
             ) : data ? (
               <>
                 <div
-                  style={{ color: '#666666', fontSize: '9px', lineHeight: 1.5 }}
+                  style={{ color: '#999999', fontSize: '9px', lineHeight: 1.5 }}
                 >
                   {data.entryTiming}
                 </div>
@@ -705,7 +705,7 @@ export default function AnalysisPanel() {
                 style={{
                   color:
                     showError || !data
-                      ? '#333333'
+                      ? '#666666'
                       : riskRewardColor(data.riskReward),
                   fontSize: '11px',
                   fontWeight: 500,
@@ -724,7 +724,7 @@ export default function AnalysisPanel() {
             ) : (
               <span
                 style={{
-                  color: showError || !data ? '#333333' : '#888888',
+                  color: showError || !data ? '#666666' : '#b0b0b0',
                   fontSize: '11px',
                 }}
               >
@@ -749,7 +749,7 @@ export default function AnalysisPanel() {
           ) : (
             <span
               style={{
-                color: showError || !data ? '#333333' : '#888888',
+                color: showError || !data ? '#666666' : '#b0b0b0',
                 fontSize: '10px',
               }}
             >
@@ -776,7 +776,7 @@ export default function AnalysisPanel() {
         >
           <span
             style={{
-              color: '#444444',
+              color: '#888888',
               fontSize: '9px',
               textTransform: 'uppercase',
               letterSpacing: '0.12em',
@@ -797,7 +797,7 @@ export default function AnalysisPanel() {
               {data.confluenceScore}/{data.confluenceTotal}
             </span>
           ) : (
-            <span style={{ color: '#333333', fontSize: '12px' }}>——</span>
+            <span style={{ color: '#666666', fontSize: '12px' }}>——</span>
           )}
         </div>
 
@@ -867,7 +867,7 @@ export default function AnalysisPanel() {
               ANALYSIS FAILED
             </div>
             <div
-              style={{ color: '#444444', fontSize: '9px', marginTop: '4px' }}
+              style={{ color: '#888888', fontSize: '9px', marginTop: '4px' }}
             >
               Check API key and retry.
             </div>
@@ -878,7 +878,7 @@ export default function AnalysisPanel() {
             <div style={{ marginBottom: '4px' }}>
               <span style={{ ...labelStyle, marginRight: '4px' }}>NOW</span>
               <span
-                style={{ color: '#666666', fontSize: '9px', lineHeight: 1.5 }}
+                style={{ color: '#999999', fontSize: '9px', lineHeight: 1.5 }}
               >
                 {cat.now}
               </span>
@@ -895,7 +895,7 @@ export default function AnalysisPanel() {
                 RISK
               </span>
               <span
-                style={{ color: '#666666', fontSize: '9px', lineHeight: 1.5 }}
+                style={{ color: '#999999', fontSize: '9px', lineHeight: 1.5 }}
               >
                 {cat.risk}
               </span>
@@ -913,7 +913,7 @@ export default function AnalysisPanel() {
               </span>
               <span
                 style={{
-                  color: '#888888',
+                  color: '#b0b0b0',
                   fontSize: '9px',
                   lineHeight: 1.5,
                   fontStyle: 'italic',
@@ -937,7 +937,7 @@ export default function AnalysisPanel() {
             </div>
           </>
         ) : (
-          <div style={{ color: '#333333', fontSize: '9px' }}>
+          <div style={{ color: '#666666', fontSize: '9px' }}>
             Run analysis to generate trade thesis.
           </div>
         )}
@@ -962,16 +962,16 @@ export default function AnalysisPanel() {
               : calendarBlocked
                 ? '#3a2200'
                 : hoverBtn
-                  ? '#444444'
+                  ? '#888888'
                   : '#2a2a2a'
           }`,
           color: loading
-            ? '#333333'
+            ? '#666666'
             : calendarBlocked
               ? '#fbbf24'
               : hoverBtn
                 ? '#e5e5e5'
-                : '#666666',
+                : '#999999',
           fontFamily: 'var(--font-mono)',
           fontSize: '10px',
           letterSpacing: '0.1em',
@@ -996,14 +996,14 @@ export default function AnalysisPanel() {
         }}
       >
         {data && !showError ? (
-          <span style={{ color: '#333333', fontSize: '8px' }}>
+          <span style={{ color: '#666666', fontSize: '8px' }}>
             LAST: {formatDateTime(data.generatedAt)}
           </span>
         ) : (
           <span />
         )}
         {technicals.lastUpdated ? (
-          <span style={{ color: '#333333', fontSize: '8px' }}>
+          <span style={{ color: '#666666', fontSize: '8px' }}>
             TA:{' '}
             {technicals.lastUpdated.toLocaleTimeString('en-US', {
               hour: '2-digit',

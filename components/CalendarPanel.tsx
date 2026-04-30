@@ -33,7 +33,7 @@ const EVENT_DISPLAY = 6
 function impactColor(impact: EventImpact): string {
   if (impact === 'HIGH') return '#f87171'
   if (impact === 'MEDIUM') return '#fbbf24'
-  return '#444444'
+  return '#888888'
 }
 
 // Format minutesUntil into a compact countdown string + color
@@ -44,7 +44,7 @@ function formatCountdownChip(e: EconomicEvent): {
   pulse: boolean
 } {
   if (!e.isUpcoming) {
-    return { text: 'passed', color: '#333333', pulse: false }
+    return { text: 'passed', color: '#666666', pulse: false }
   }
   const m = e.minutesUntil
   if (m <= 30) {
@@ -116,7 +116,7 @@ export default function CalendarPanel() {
         style={{
           padding: '24px 12px',
           textAlign: 'center',
-          color: '#333333',
+          color: '#666666',
           fontSize: '10px',
         }}
       >
@@ -129,7 +129,7 @@ export default function CalendarPanel() {
         style={{
           padding: '8px 12px',
           textAlign: 'center',
-          color: '#333333',
+          color: '#666666',
           fontSize: '9px',
         }}
       >
@@ -139,7 +139,7 @@ export default function CalendarPanel() {
   } else {
     body = events.slice(0, EVENT_DISPLAY).map((e, i) => {
       const chip = formatCountdownChip(e)
-      const titleColor = e.isUpcoming ? '#888888' : '#444444'
+      const titleColor = e.isUpcoming ? '#b0b0b0' : '#888888'
       return (
         <div key={`${e.title}-${e.date}-${i}`}>
           {/* Top row — title (+ country badge) on the left,
@@ -218,10 +218,10 @@ export default function CalendarPanel() {
                 borderBottom: '1px solid #1a1a1a',
               }}
             >
-              <span style={{ color: '#444444', fontSize: '8px' }}>
+              <span style={{ color: '#888888', fontSize: '8px' }}>
                 F: {e.forecast}
               </span>
-              <span style={{ color: '#333333', fontSize: '8px' }}>
+              <span style={{ color: '#666666', fontSize: '8px' }}>
                 P: {e.previous}
               </span>
             </div>
@@ -255,7 +255,7 @@ export default function CalendarPanel() {
         >
           <span
             style={{
-              color: '#444444',
+              color: '#888888',
               fontSize: '9px',
               textTransform: 'uppercase',
               letterSpacing: '0.12em',

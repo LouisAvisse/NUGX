@@ -38,7 +38,7 @@ function impactBadgeStyle(impact: ImpactLevel): React.CSSProperties {
       ? { background: '#1a0a0a', color: '#f87171', border: '1px solid #3a1a1a' }
       : impact === 'MEDIUM'
         ? { background: '#1a1500', color: '#fbbf24', border: '1px solid #3a2e00' }
-        : { background: '#0a0a0a', color: '#444444', border: '1px solid #1e1e1e' }
+        : { background: '#0a0a0a', color: '#888888', border: '1px solid #1e1e1e' }
   return {
     ...palette,
     fontSize: '8px',
@@ -53,7 +53,7 @@ function impactBadgeStyle(impact: ImpactLevel): React.CSSProperties {
 function sentimentDotColor(s: NewsSentiment | undefined): string {
   if (s === 'BULLISH') return '#4ade80'
   if (s === 'BEARISH') return '#f87171'
-  return '#444444'
+  return '#888888'
 }
 
 // Skeleton row — shaped like a real article so the list reserves
@@ -112,10 +112,10 @@ function CenteredMessage({
         padding: '0 12px',
       }}
     >
-      {glyph && <div style={{ color: '#333333', fontSize: '20px' }}>{glyph}</div>}
+      {glyph && <div style={{ color: '#666666', fontSize: '20px' }}>{glyph}</div>}
       <div
         style={{
-          color: '#333333',
+          color: '#666666',
           fontSize: '10px',
           marginTop: glyph ? '8px' : 0,
           textAlign: 'center',
@@ -158,7 +158,7 @@ function FilterChip({
         background: 'transparent',
         border: 'none',
         borderBottom: active ? '1px solid #e5e5e5' : '1px solid transparent',
-        color: active ? '#e5e5e5' : '#333333',
+        color: active ? '#e5e5e5' : '#666666',
         fontSize: '8px',
         padding: '0 4px',
         letterSpacing: '0.08em',
@@ -214,7 +214,7 @@ export default function NewsFeed() {
       return { text: 'BULLISH FLOW', color: '#4ade80' }
     if (bear > bull + 1)
       return { text: 'BEARISH FLOW', color: '#f87171' }
-    return { text: 'MIXED', color: '#888888' }
+    return { text: 'MIXED', color: '#b0b0b0' }
   }, [sentimentCounts])
 
   // Apply the active filter to produce the visible list.
@@ -311,7 +311,7 @@ export default function NewsFeed() {
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap',
-                color: isHovered ? '#e5e5e5' : '#888888',
+                color: isHovered ? '#e5e5e5' : '#b0b0b0',
                 fontSize: '10px',
                 lineHeight: 1.4,
               }}
@@ -320,7 +320,7 @@ export default function NewsFeed() {
             </span>
             <span
               style={{
-                color: '#333333',
+                color: '#666666',
                 fontSize: '9px',
                 flexShrink: 0,
               }}
@@ -331,7 +331,7 @@ export default function NewsFeed() {
           {/* Source line — quieter, below the title. */}
           <div
             style={{
-              color: '#444444',
+              color: '#888888',
               fontSize: '9px',
               marginTop: '3px',
             }}
@@ -374,7 +374,7 @@ export default function NewsFeed() {
       >
         <span
           style={{
-            color: '#444444',
+            color: '#888888',
             fontSize: '9px',
             textTransform: 'uppercase',
             letterSpacing: '0.12em',
@@ -404,7 +404,7 @@ export default function NewsFeed() {
         </div>
         <span
           style={{
-            color: '#333333',
+            color: '#666666',
             fontSize: '9px',
             flexShrink: 0,
             marginLeft: 'auto',
@@ -436,7 +436,7 @@ export default function NewsFeed() {
             <span style={{ color: '#4ade80', fontSize: '9px' }}>
               {sentimentCounts.bull}
             </span>
-            <span style={{ color: '#333333', fontSize: '8px' }}>BULL</span>
+            <span style={{ color: '#666666', fontSize: '8px' }}>BULL</span>
           </div>
           {/* Bearish count */}
           <div
@@ -446,17 +446,17 @@ export default function NewsFeed() {
             <span style={{ color: '#f87171', fontSize: '9px' }}>
               {sentimentCounts.bear}
             </span>
-            <span style={{ color: '#333333', fontSize: '8px' }}>BEAR</span>
+            <span style={{ color: '#666666', fontSize: '8px' }}>BEAR</span>
           </div>
           {/* Neutral count */}
           <div
             style={{ display: 'flex', gap: '4px', alignItems: 'center' }}
           >
-            <span style={{ color: '#444444', fontSize: '8px' }}>●</span>
-            <span style={{ color: '#888888', fontSize: '9px' }}>
+            <span style={{ color: '#888888', fontSize: '8px' }}>●</span>
+            <span style={{ color: '#b0b0b0', fontSize: '9px' }}>
               {sentimentCounts.neut}
             </span>
-            <span style={{ color: '#333333', fontSize: '8px' }}>NEUT</span>
+            <span style={{ color: '#666666', fontSize: '8px' }}>NEUT</span>
           </div>
         </div>
         <span
@@ -506,7 +506,7 @@ export default function NewsFeed() {
               <div
                 style={{
                   width: `${neutPct}%`,
-                  background: '#333333',
+                  background: '#666666',
                 }}
               />
               <div
@@ -537,8 +537,8 @@ export default function NewsFeed() {
           justifyContent: 'space-between',
         }}
       >
-        <span style={{ color: '#333333', fontSize: '9px' }}>{footerLabel}</span>
-        <span style={{ color: '#333333', fontSize: '9px' }}>REFRESH 15m</span>
+        <span style={{ color: '#666666', fontSize: '9px' }}>{footerLabel}</span>
+        <span style={{ color: '#666666', fontSize: '9px' }}>REFRESH 15m</span>
       </div>
     </div>
   )

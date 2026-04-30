@@ -37,14 +37,14 @@ function inverseValueColor(change: number): string {
 
 function atrContext(atr: number): { text: string; color: string } {
   if (atr > 25) return { text: 'HIGH VOL', color: '#f87171' }
-  if (atr > 15) return { text: 'NORMAL', color: '#888888' }
+  if (atr > 15) return { text: 'NORMAL', color: '#b0b0b0' }
   return { text: 'LOW VOL', color: '#4ade80' }
 }
 
 function dayRangeFillColor(pct: number): string {
   if (pct > 70) return '#f87171'
   if (pct < 30) return '#4ade80'
-  return '#888888'
+  return '#b0b0b0'
 }
 
 // Flash hook — mirrors PriceBar's price-flash. Returns the
@@ -83,7 +83,7 @@ const chipStyle: React.CSSProperties = {
 }
 
 const chipLabelStyle: React.CSSProperties = {
-  color: '#444444',
+  color: '#888888',
   fontSize: '8px',
   textTransform: 'uppercase',
   letterSpacing: '0.06em',
@@ -103,7 +103,7 @@ const chipValueRow: React.CSSProperties = {
 // Each row's left-side section label ("MACRO" / "TECHNICAL").
 // Fixed width so the chips line up vertically across both rows.
 const sectionLabelStyle: React.CSSProperties = {
-  color: '#333333',
+  color: '#666666',
   fontSize: '8px',
   textTransform: 'uppercase',
   letterSpacing: '0.12em',
@@ -214,7 +214,7 @@ export default function SignalsPanel() {
               <span
                 className={dxyFlash}
                 style={{
-                  color: dxy ? inverseValueColor(dxy.change) : '#333333',
+                  color: dxy ? inverseValueColor(dxy.change) : '#666666',
                   fontSize: '11px',
                   padding: '1px 3px',
                 }}
@@ -223,7 +223,7 @@ export default function SignalsPanel() {
               </span>
               <span
                 style={{
-                  color: dxy ? changeColor(dxy.change) : '#333333',
+                  color: dxy ? changeColor(dxy.change) : '#666666',
                   fontSize: '9px',
                 }}
               >
@@ -248,7 +248,7 @@ export default function SignalsPanel() {
               <span
                 className={us10yFlash}
                 style={{
-                  color: us10y ? inverseValueColor(us10y.change) : '#333333',
+                  color: us10y ? inverseValueColor(us10y.change) : '#666666',
                   fontSize: '11px',
                   padding: '1px 3px',
                 }}
@@ -257,7 +257,7 @@ export default function SignalsPanel() {
               </span>
               <span
                 style={{
-                  color: us10y ? changeColor(us10y.change) : '#333333',
+                  color: us10y ? changeColor(us10y.change) : '#666666',
                   fontSize: '9px',
                 }}
               >
@@ -288,7 +288,7 @@ export default function SignalsPanel() {
           </Tooltip>
           <span
             style={{
-              color: session.isHighVolatility ? '#fbbf24' : '#888888',
+              color: session.isHighVolatility ? '#fbbf24' : '#b0b0b0',
               fontSize: '11px',
             }}
           >
@@ -341,7 +341,7 @@ export default function SignalsPanel() {
               )}
             </div>
           ) : (
-            <span style={{ color: '#333333', fontSize: '11px' }}>
+            <span style={{ color: '#666666', fontSize: '11px' }}>
               {PLACEHOLDER}
             </span>
           )}
@@ -366,7 +366,7 @@ export default function SignalsPanel() {
                       ? '#4ade80'
                       : ind.macdHistogram < 0
                         ? '#f87171'
-                        : '#888888',
+                        : '#b0b0b0',
                   fontSize: '11px',
                 }}
               >
@@ -384,7 +384,7 @@ export default function SignalsPanel() {
               )}
             </div>
           ) : (
-            <span style={{ color: '#333333', fontSize: '11px' }}>
+            <span style={{ color: '#666666', fontSize: '11px' }}>
               {PLACEHOLDER}
             </span>
           )}
@@ -408,14 +408,14 @@ export default function SignalsPanel() {
                     ? '#4ade80'
                     : ind.trend === 'DOWNTREND'
                       ? '#f87171'
-                      : '#888888',
+                      : '#b0b0b0',
                 fontSize: '11px',
               }}
             >
               {ind.trend}
             </span>
           ) : (
-            <span style={{ color: '#333333', fontSize: '11px' }}>
+            <span style={{ color: '#666666', fontSize: '11px' }}>
               {PLACEHOLDER}
             </span>
           )}
@@ -453,7 +453,7 @@ export default function SignalsPanel() {
               </span>
             </div>
           ) : (
-            <span style={{ color: '#333333', fontSize: '11px' }}>
+            <span style={{ color: '#666666', fontSize: '11px' }}>
               {PLACEHOLDER}
             </span>
           )}
@@ -474,7 +474,7 @@ export default function SignalsPanel() {
               const ctx = atrContext(ind.atr)
               return (
                 <div style={chipValueRow}>
-                  <span style={{ color: '#888888', fontSize: '11px' }}>
+                  <span style={{ color: '#b0b0b0', fontSize: '11px' }}>
                     ${ind.atr.toFixed(2)}
                   </span>
                   <span style={{ color: ctx.color, fontSize: '8px' }}>
@@ -484,7 +484,7 @@ export default function SignalsPanel() {
               )
             })()
           ) : (
-            <span style={{ color: '#333333', fontSize: '11px' }}>
+            <span style={{ color: '#666666', fontSize: '11px' }}>
               {PLACEHOLDER}
             </span>
           )}
@@ -505,7 +505,7 @@ export default function SignalsPanel() {
               const ref = ind.ema20
               if (ref === 0)
                 return (
-                  <span style={{ color: '#888888', fontSize: '10px' }}>
+                  <span style={{ color: '#b0b0b0', fontSize: '10px' }}>
                     INSIDE
                   </span>
                 )
@@ -522,13 +522,13 @@ export default function SignalsPanel() {
                   </span>
                 )
               return (
-                <span style={{ color: '#888888', fontSize: '10px' }}>
+                <span style={{ color: '#b0b0b0', fontSize: '10px' }}>
                   INSIDE
                 </span>
               )
             })()
           ) : (
-            <span style={{ color: '#333333', fontSize: '11px' }}>
+            <span style={{ color: '#666666', fontSize: '11px' }}>
               {PLACEHOLDER}
             </span>
           )}
@@ -576,7 +576,7 @@ export default function SignalsPanel() {
               </div>
             </div>
           ) : (
-            <span style={{ color: '#333333', fontSize: '11px' }}>
+            <span style={{ color: '#666666', fontSize: '11px' }}>
               {PLACEHOLDER}
             </span>
           )}
@@ -592,7 +592,7 @@ export default function SignalsPanel() {
           }}
         >
           <span style={chipLabelStyle}>STATUS</span>
-          <span style={{ color: '#333333', fontSize: '9px' }}>{upd}</span>
+          <span style={{ color: '#666666', fontSize: '9px' }}>{upd}</span>
         </div>
       </div>
     </div>

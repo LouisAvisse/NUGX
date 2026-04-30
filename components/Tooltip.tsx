@@ -134,7 +134,7 @@ export default function Tooltip({
             width: '200px',
             fontSize: '9px',
             lineHeight: 1.6,
-            color: '#888888',
+            color: '#b0b0b0',
             pointerEvents: 'none',
             fontFamily: 'var(--font-mono)',
             letterSpacing: '0.02em',
