@@ -201,3 +201,4 @@ Everything else: MEDIUM
 - [#9] All four data hooks implemented — polling intervals set, loading/error states handled
 - [#10] PriceBar implemented — live price, change, high/low, session, live indicator
 - [#11] TradingViewChart implemented — XAUUSD 1H dark theme, RSI + MACD
+- [#12] SignalsPanel implemented — DXY, US10Y, spread, session volatility
