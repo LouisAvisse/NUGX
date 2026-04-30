@@ -213,3 +213,4 @@ Everything else: MEDIUM
 - [#21] Trade journal UI — slide-in panel, log form, entry cards, PnL, localStorage persistence
 - [#22] Error states + loading skeletons — shimmer animation, graceful fallbacks in all four components
 - [#23] Micro-interactions — price flash, fade-in on data load, smooth button hover transitions
+- [#25] technicalindicators package installed
