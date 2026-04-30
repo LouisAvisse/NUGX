@@ -21,6 +21,7 @@
 import { useEffect, useState } from 'react'
 import { useGoldPrice } from '@/lib/hooks/useGoldPrice'
 import { formatPrice, formatPct, changeColor } from '@/lib/utils'
+import Tooltip from '@/components/Tooltip'
 
 const PLACEHOLDER = '——'
 
@@ -100,7 +101,11 @@ export default function BottomBar() {
       >
         {/* OPEN */}
         <div style={blockStyle}>
-          <span style={labelStyle}>OPEN</span>
+          <Tooltip
+            content="Today's opening price for gold. Compare with current price to gauge intraday direction. Price above open = buyers in control today."
+          >
+            <span style={labelStyle}>OPEN</span>
+          </Tooltip>
           <span
             style={{
               ...valueStyle,
@@ -114,7 +119,9 @@ export default function BottomBar() {
 
         {/* PREV CLOSE */}
         <div style={blockStyle}>
-          <span style={labelStyle}>PREV</span>
+          <Tooltip content="Yesterday's closing price. The difference between PREV and current price is today's total move so far.">
+            <span style={labelStyle}>PREV</span>
+          </Tooltip>
           <span
             style={{
               ...valueStyle,
@@ -129,7 +136,9 @@ export default function BottomBar() {
         {/* DAY CHANGE — formatPrice(change) + parenthesized pct,
             colored by direct sign tint via changeColor. */}
         <div style={blockStyle}>
-          <span style={labelStyle}>CHG</span>
+          <Tooltip content="Today's price change in dollars and percentage from yesterday's close. Positive = gold up on the day. Negative = gold down on the day.">
+            <span style={labelStyle}>CHG</span>
+          </Tooltip>
           <span
             style={{
               ...valueStyle,
@@ -173,14 +182,21 @@ export default function BottomBar() {
 
         {/* 52W H — static placeholder until a real 52-week source lands. */}
         <div style={blockStyle}>
-          <span style={labelStyle}>52W H</span>
+          <Tooltip content="Highest gold price in the past 52 weeks. A major resistance level — if current price approaches this, expect selling pressure and potential reversal.">
+            <span style={labelStyle}>52W H</span>
+          </Tooltip>
           <span style={{ ...valueStyle, color: '#4ade80' }}>$3,500.00</span>
         </div>
         <Divider />
 
         {/* 52W L — static placeholder until a real 52-week source lands. */}
         <div style={blockStyle}>
-          <span style={labelStyle}>52W L</span>
+          <Tooltip
+            position="left"
+            content="Lowest gold price in the past 52 weeks. A major support level — if current price approaches this, expect buying interest and potential bounce."
+          >
+            <span style={labelStyle}>52W L</span>
+          </Tooltip>
           <span style={{ ...valueStyle, color: '#f87171' }}>$2,287.00</span>
         </div>
         <Divider />

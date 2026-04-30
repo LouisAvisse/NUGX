@@ -16,6 +16,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useSignals } from '@/lib/hooks/useSignals'
 import { getCurrentSession } from '@/lib/session'
 import { formatPct, changeColor } from '@/lib/utils'
+import Tooltip from '@/components/Tooltip'
 
 function inverseValueColor(change: number): string {
   if (change > 0) return '#f87171'
@@ -135,16 +136,26 @@ export default function SignalsPanel() {
       {/* Header. */}
       <div
         style={{
-          color: '#444444',
-          fontSize: '9px',
-          textTransform: 'uppercase',
-          letterSpacing: '0.12em',
           borderBottom: '1px solid #222222',
           paddingBottom: '6px',
           marginBottom: '2px',
         }}
       >
-        MARKET SIGNALS
+        <Tooltip
+          position="right"
+          content="Key macro indicators that drive gold price. Watch for confluence — when multiple signals agree, the trade signal is stronger."
+        >
+          <span
+            style={{
+              color: '#444444',
+              fontSize: '9px',
+              textTransform: 'uppercase',
+              letterSpacing: '0.12em',
+            }}
+          >
+            MARKET SIGNALS
+          </span>
+        </Tooltip>
       </div>
 
       {/* Optional error banner — rendered only when the signals
@@ -163,7 +174,12 @@ export default function SignalsPanel() {
 
       {/* DXY row */}
       <div style={rowStyle}>
-        <span style={labelStyle}>DXY</span>
+        <Tooltip
+          position="right"
+          content="US Dollar Index — measures USD strength vs 6 major currencies. Gold and DXY are inversely correlated. DXY falling = bullish for gold. DXY rising = bearish. Most important macro signal for gold traders."
+        >
+          <span style={labelStyle}>DXY</span>
+        </Tooltip>
         <div style={rightSideStyle}>
           {showSkeleton ? (
             <CellSkeletons />
@@ -194,7 +210,12 @@ export default function SignalsPanel() {
 
       {/* US10Y row */}
       <div style={rowStyle}>
-        <span style={labelStyle}>US 10Y</span>
+        <Tooltip
+          position="right"
+          content="US 10-Year Treasury yield. Gold pays no interest, so rising yields make bonds more attractive vs gold. Yield rising = bearish for gold. Yield falling = bullish."
+        >
+          <span style={labelStyle}>US 10Y</span>
+        </Tooltip>
         <div style={rightSideStyle}>
           {showSkeleton ? (
             <CellSkeletons />
@@ -225,7 +246,12 @@ export default function SignalsPanel() {
 
       {/* SPREAD row — static. */}
       <div style={rowStyle}>
-        <span style={labelStyle}>SPREAD</span>
+        <Tooltip
+          position="right"
+          content="Bid-ask spread in dollars — the cost to enter and exit a gold trade. Lower is better. Widens during low liquidity (off-hours, major news events)."
+        >
+          <span style={labelStyle}>SPREAD</span>
+        </Tooltip>
         <div style={rightSideStyle}>
           <span style={{ color: '#e5e5e5', fontSize: '11px' }}>0.35</span>
         </div>
@@ -233,7 +259,12 @@ export default function SignalsPanel() {
 
       {/* SESSION VOL row — pure session-driven, no fetch. */}
       <div style={rowStyle}>
-        <span style={labelStyle}>SESSION VOL</span>
+        <Tooltip
+          position="right"
+          content="Expected volume level for current session. HIGH during NY/London overlap (12-16 UTC) when both markets are active. Higher volume means more reliable price action and tighter spreads."
+        >
+          <span style={labelStyle}>SESSION VOL</span>
+        </Tooltip>
         <div style={rightSideStyle}>
           <span
             style={{

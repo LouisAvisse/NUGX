@@ -27,6 +27,7 @@ import { getCurrentSession } from '@/lib/session'
 import { formatPrice, formatChange, formatPct, changeColor } from '@/lib/utils'
 import type { SessionName } from '@/lib/types'
 import JournalPanel from '@/components/JournalPanel'
+import Tooltip from '@/components/Tooltip'
 
 function sessionColor(name: SessionName): string {
   if (name === 'NY/London Overlap') return '#fbbf24'
@@ -94,19 +95,32 @@ export default function PriceBar() {
           background: 'transparent',
         }}
       >
-        {/* 1. SYMBOL */}
+        {/* 1. SYMBOL — both lines wrapped in tooltips with the
+            ISO-code / spot-price explanations from the spec. */}
         <div style={{ display: 'flex', flexDirection: 'column' }}>
-          <span
-            style={{
-              color: '#444444',
-              fontSize: '9px',
-              textTransform: 'uppercase',
-              letterSpacing: '0.1em',
-            }}
+          <Tooltip
+            position="bottom"
+            content="XAU is the ISO code for gold. USD is US Dollar. This shows the cost of one troy ounce of gold in dollars on the spot market."
           >
-            XAU/USD
-          </span>
-          <span style={{ color: '#333333', fontSize: '8px' }}>GOLD SPOT</span>
+            <span
+              style={{
+                color: '#444444',
+                fontSize: '9px',
+                textTransform: 'uppercase',
+                letterSpacing: '0.1em',
+              }}
+            >
+              XAU/USD
+            </span>
+          </Tooltip>
+          <Tooltip
+            position="bottom"
+            content="Spot price = current market price for immediate delivery. Different from futures which settle at a later date. This is the real-time trading price."
+          >
+            <span style={{ color: '#333333', fontSize: '8px' }}>
+              GOLD SPOT
+            </span>
+          </Tooltip>
         </div>
 
         {/* 2. PRICE — three states. Error wins over loading wins
@@ -162,7 +176,12 @@ export default function PriceBar() {
 
         {/* 5. HIGH */}
         <div style={{ display: 'flex', flexDirection: 'column' }}>
-          <span style={{ color: '#444444', fontSize: '9px' }}>H</span>
+          <Tooltip
+            position="bottom"
+            content="Session high — the highest price gold has reached today. Acts as intraday resistance. A breakout above this level is a bullish signal."
+          >
+            <span style={{ color: '#444444', fontSize: '9px' }}>H</span>
+          </Tooltip>
           {error ? (
             <span style={{ color: '#333333', fontSize: '11px' }}>
               {PLACEHOLDER}
@@ -178,7 +197,12 @@ export default function PriceBar() {
 
         {/* 6. LOW */}
         <div style={{ display: 'flex', flexDirection: 'column' }}>
-          <span style={{ color: '#444444', fontSize: '9px' }}>L</span>
+          <Tooltip
+            position="bottom"
+            content="Session low — the lowest price gold has reached today. Acts as intraday support. A breakdown below this level is a bearish signal."
+          >
+            <span style={{ color: '#444444', fontSize: '9px' }}>L</span>
+          </Tooltip>
           {error ? (
             <span style={{ color: '#333333', fontSize: '11px' }}>
               {PLACEHOLDER}
@@ -197,24 +221,29 @@ export default function PriceBar() {
 
         {/* 8. SESSION */}
         <div style={{ display: 'flex', flexDirection: 'column' }}>
-          <span
-            style={{
-              color: sessionColor(session.name),
-              fontSize: '10px',
-              textTransform: 'uppercase',
-              letterSpacing: '0.1em',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '6px',
-            }}
+          <Tooltip
+            position="bottom"
+            content="Gold trades 23h/day across global sessions. Tokyo (00-07 UTC): low volume. London (07-12 UTC): high volume. NY/London overlap (12-16 UTC): peak volume, best for day trading. New York (16-21 UTC): high volume, US-driven."
           >
-            {session.isHighVolatility && (
-              <span className="pulse" style={{ color: '#fbbf24' }}>
-                ●
-              </span>
-            )}
-            {session.name}
-          </span>
+            <span
+              style={{
+                color: sessionColor(session.name),
+                fontSize: '10px',
+                textTransform: 'uppercase',
+                letterSpacing: '0.1em',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+              }}
+            >
+              {session.isHighVolatility && (
+                <span className="pulse" style={{ color: '#fbbf24' }}>
+                  ●
+                </span>
+              )}
+              {session.name}
+            </span>
+          </Tooltip>
         </div>
 
         {/* 9. JOURNAL button */}
@@ -239,22 +268,30 @@ export default function PriceBar() {
         </button>
 
         {/* 10. LIVE indicator */}
-        <div
-          style={{ display: 'flex', alignItems: 'center', gap: '4px' }}
+        <Tooltip
+          position="left"
+          content="Price refreshes every 30 seconds from gold-api.com. During market hours this reflects the real spot price."
         >
-          <span className="pulse" style={{ color: '#4ade80', fontSize: '8px' }}>
-            ●
-          </span>
           <span
-            style={{
-              color: '#444444',
-              fontSize: '9px',
-              letterSpacing: '0.1em',
-            }}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}
           >
-            LIVE
+            <span
+              className="pulse"
+              style={{ color: '#4ade80', fontSize: '8px' }}
+            >
+              ●
+            </span>
+            <span
+              style={{
+                color: '#444444',
+                fontSize: '9px',
+                letterSpacing: '0.1em',
+              }}
+            >
+              LIVE
+            </span>
           </span>
-        </div>
+        </Tooltip>
       </div>
 
       <JournalPanel
