@@ -215,3 +215,4 @@ Everything else: MEDIUM
 - [#23] Micro-interactions — price flash, fade-in on data load, smooth button hover transitions
 - [#25] technicalindicators package installed
 - [#26] Tooltip component + applied to existing labels (PriceBar, BottomBar, SignalsPanel headers; AnalysisPanel + NewsFeed pending future-UI items)
+- [#27] Schema expansion — TechnicalIndicators, EconomicEvent/CalendarResponse, NewsSentiment, SignalBreakdown; expanded AnalysisRequest + AnalysisResult; FALLBACK + buildRequest updated with safe defaults

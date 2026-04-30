@@ -132,16 +132,80 @@ export default function AnalysisPanel() {
   }, [data?.generatedAt])
 
   // Build the analyze payload from current upstream state.
+  // The technicals and calendar fields are stubbed with safe
+  // defaults until useTechnicals + useCalendar exist (steps B-D
+  // of the resume plan in the [#26] close-out report). Once
+  // those hooks ship, replace the stubs with the real values.
+  // News sentiment counts derive from articles[].sentiment when
+  // present; missing sentiment falls into NEUTRAL.
   const buildRequest = useCallback((): AnalysisRequest => {
+    const session = getCurrentSession()
+    const articles = news.articles
+    const newsBullishCount = articles.filter(
+      (a) => a.sentiment === 'BULLISH'
+    ).length
+    const newsBearishCount = articles.filter(
+      (a) => a.sentiment === 'BEARISH'
+    ).length
+    // Treat missing sentiment as NEUTRAL so the counts always sum
+    // to articles.length.
+    const newsNeutralCount = articles.length - newsBullishCount - newsBearishCount
+
     return {
+      // Price
       price: goldPrice.data?.price ?? 0,
       changePct: goldPrice.data?.changePct ?? 0,
       high: goldPrice.data?.high ?? 0,
       low: goldPrice.data?.low ?? 0,
+      open: goldPrice.data?.open ?? 0,
+
+      // Technical indicators — stubbed until useTechnicals exists.
+      // 50 for RSI is the neutral midpoint; 0/'NONE'/'NEUTRAL' for
+      // the rest. The Claude prompt will explicitly note these
+      // signals as "unknown — score NEUTRAL" while the hook ships.
+      ema20: 0,
+      ema50: 0,
+      ema200: 0,
+      rsi: 50,
+      macd: 0,
+      macdSignal: 0,
+      macdHistogram: 0,
+      macdCross: 'NONE',
+      atr: 0,
+      bbUpper: 0,
+      bbLower: 0,
+      swingHigh: 0,
+      swingLow: 0,
+      trend: 'RANGING',
+      rsiZone: 'NEUTRAL',
+      dayRangePct: 50,
+      priceVsEma20: 'ABOVE',
+      priceVsEma50: 'ABOVE',
+      priceVsEma200: 'ABOVE',
+
+      // Macro
       dxy: signals.data?.dxy.price ?? 0,
+      dxyChangePct: signals.data?.dxy.changePct ?? 0,
       us10y: signals.data?.us10y.price ?? 0,
-      session: getCurrentSession().name,
-      news: news.articles.slice(0, 5).map((a) => a.title),
+      us10yChangePct: signals.data?.us10y.changePct ?? 0,
+
+      // Session
+      session: session.name,
+      sessionIsHighVolatility: session.isHighVolatility,
+
+      // Calendar — clearToTrade defaults true so the panel doesn't
+      // gate analysis off until useCalendar exists. Once the hook
+      // ships, replace with calendar.data?.* reads.
+      clearToTrade: true,
+      warningMessage: null,
+      nextEventTitle: null,
+      nextEventMinutes: null,
+
+      // News sentiment
+      newsBullishCount,
+      newsBearishCount,
+      newsNeutralCount,
+      topHeadlines: articles.slice(0, 6).map((a) => a.title),
     }
   }, [goldPrice.data, signals.data, news.articles])
 

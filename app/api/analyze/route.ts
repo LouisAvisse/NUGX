@@ -56,7 +56,11 @@ Rules:
 - Be concise and decisive — no hedging language`
 
 // Stable, typed safe-default. NEUTRAL/LOW/FLAT explicitly tells
-// the trader "no analysis available, do not act".
+// the trader "no analysis available, do not act". Confluence-engine
+// fields (`confluenceScore`, `signals`, etc.) and Marcus Reid
+// review fields (`entryType`, `invalidationLevel`, `marketCondition`)
+// all default to neutral / placeholder values so the AnalysisPanel
+// renders the empty-state cleanly during outages.
 const FALLBACK: AnalysisResult = {
   bias: 'NEUTRAL',
   confidence: 'LOW',
@@ -69,6 +73,30 @@ const FALLBACK: AnalysisResult = {
   catalyst: 'Analysis unavailable. Check API connection and retry.',
   rationale: 'Unable to generate analysis at this time.',
   generatedAt: new Date().toISOString(),
+
+  // Confluence engine fields — populated by the [#27] prompt
+  // rebuild; safe defaults here keep the type satisfied.
+  confluenceScore: 0,
+  confluenceTotal: 8,
+  signals: {
+    trend: 'NEUTRAL',
+    momentum: 'NEUTRAL',
+    macd: 'NEUTRAL',
+    dxy: 'NEUTRAL',
+    us10y: 'NEUTRAL',
+    session: 'NEUTRAL',
+    news: 'NEUTRAL',
+    calendar: 'NEUTRAL',
+  },
+  holdTime: '——',
+  riskReward: '——',
+  entryTiming: '——',
+  exitPlan: '——',
+
+  // Marcus Reid review fields — set by the prompt upgrade.
+  entryType: 'WAIT',
+  invalidationLevel: '——',
+  marketCondition: 'RANGING',
 }
 
 // Required fields on the parsed JSON — used for shape validation
@@ -109,7 +137,7 @@ MACRO SIGNALS:
 TRADING SESSION: ${body.session}
 
 LATEST MARKET NEWS:
-${body.news.map((n, i) => `${i + 1}. ${n}`).join('\n')}
+${body.topHeadlines.map((n: string, i: number) => `${i + 1}. ${n}`).join('\n')}
 
 Provide your structured JSON analysis now.`
 
