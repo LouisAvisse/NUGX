@@ -24,7 +24,7 @@ sessions — not a commercial product.
 | `GET /api/news`    | Filtered gold/macro headlines        |
 | `POST /api/analyze`| Claude trade analysis (bias, levels) |
 
-Full API contracts and architecture rules live in [`CLAUDE.md`](./CLAUDE.md).
+Full API contracts and architecture rules live in [`.claude/context.md`](./.claude/context.md).
 
 ## Setup
 
@@ -57,4 +57,4 @@ NEWSDATA_API_KEY=      # newsdata.io free tier key
 - **Off-hours** 21:00–00:00
 
 ## Status
-Bootstrapped. See `CLAUDE.md` for the full spec and commit log.
+Bootstrapped. See `.claude/context.md` for the full spec and commit log.

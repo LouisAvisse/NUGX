@@ -190,3 +190,4 @@ Everything else: MEDIUM
 
 ## Commit log
 - [INIT] context.md created — project fully specced, ready to build
+- [#1] Next.js 15 scaffolded — clean default project, no modifications
