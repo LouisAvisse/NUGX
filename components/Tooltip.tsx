@@ -8,6 +8,12 @@
 //      against the viewport with an 8px safety margin so hovering
 //      the right-edge chip in the SignalsPanel strip still shows
 //      the full content.
+//   3. It is rendered via createPortal directly into document.body
+//      so no ancestor stacking context (transform, filter, etc.)
+//      or sibling canvas can paint above it. Without the portal,
+//      hovering a SignalsPanel chip near the chart legend caused
+//      the legend's EMA pills to bleed through the tooltip box —
+//      the failure mode the user reported in screenshot #3.
 //
 // `position` controls the preferred placement relative to the
 // trigger:
@@ -26,6 +32,7 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 
 interface TooltipProps {
   content: string
@@ -33,7 +40,7 @@ interface TooltipProps {
   position?: 'top' | 'bottom' | 'left' | 'right'
 }
 
-const TOOLTIP_WIDTH = 220 // px — slightly wider than the old 200 since text gets more breathing room
+const TOOLTIP_WIDTH = 240 // px — slightly wider so denser French copy reads on 2-3 lines instead of 4-5
 const VIEWPORT_PADDING = 8 // px — margin from each viewport edge before clamping
 const TRIGGER_GAP = 8 // px — gap between the trigger and the tooltip box
 
@@ -53,6 +60,13 @@ export default function Tooltip({
   const [coords, setCoords] = useState<{ top: number; left: number } | null>(
     null
   )
+  // SSR guard — createPortal needs document.body, which doesn't
+  // exist on the server. Flip to true on first effect tick so
+  // the portal only renders client-side.
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => {
+    setMounted(true)
+  }, [])
 
   // Compute viewport-clamped coordinates whenever visibility or
   // position prop change. Re-running on every show keeps it
@@ -100,6 +114,46 @@ export default function Tooltip({
     setCoords({ top, left })
   }, [visible, position])
 
+  // The tooltip box itself. Rendered via portal into document.body
+  // so it's a top-level child of <body>, escaping any ancestor
+  // stacking context. `display: block` is critical — the previous
+  // version rendered as a <span> with position:fixed but no
+  // explicit display, and Safari + some Chrome stacking-context
+  // edge cases caused width: 220px to be ignored, so the box
+  // bled horizontally across the SignalsPanel + chart legend.
+  // boxSizing: border-box keeps padding inside the declared width.
+  const tooltipBox = visible && coords
+    ? (
+        <div
+          style={{
+            position: 'fixed',
+            top: `${coords.top}px`,
+            left: `${coords.left}px`,
+            zIndex: 9999,
+            display: 'block',
+            boxSizing: 'border-box',
+            width: `${TOOLTIP_WIDTH}px`,
+            background: '#161616',
+            border: '1px solid #2a2a2a',
+            padding: '8px 10px',
+            fontSize: '10px',
+            lineHeight: 1.5,
+            color: '#c5c5c5',
+            pointerEvents: 'none',
+            fontFamily: 'var(--font-sans)',
+            letterSpacing: '0.01em',
+            borderRadius: '3px',
+            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.4)',
+            whiteSpace: 'normal',
+            wordBreak: 'normal',
+            overflowWrap: 'anywhere',
+          }}
+        >
+          {content}
+        </div>
+      )
+    : null
+
   return (
     <span
       ref={wrapperRef}
@@ -115,33 +169,7 @@ export default function Tooltip({
       onMouseLeave={() => setVisible(false)}
     >
       {children}
-      {visible && coords && (
-        <span
-          // position:fixed so no ancestor overflow:hidden can
-          // clip the box, and the coordinates are computed in
-          // viewport space.
-          style={{
-            position: 'fixed',
-            top: `${coords.top}px`,
-            left: `${coords.left}px`,
-            zIndex: 1000,
-            background: '#161616',
-            border: '1px solid #2a2a2a',
-            padding: '8px 10px',
-            width: `${TOOLTIP_WIDTH}px`,
-            fontSize: '10px',
-            lineHeight: 1.5,
-            color: '#c5c5c5',
-            pointerEvents: 'none',
-            fontFamily: 'var(--font-sans)',
-            letterSpacing: '0.01em',
-            borderRadius: '3px',
-            boxShadow: '0 2px 8px rgba(0, 0, 0, 0.4)',
-          }}
-        >
-          {content}
-        </span>
-      )}
+      {mounted && tooltipBox && createPortal(tooltipBox, document.body)}
     </span>
   )
 }

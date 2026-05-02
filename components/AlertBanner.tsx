@@ -18,6 +18,7 @@
 
 'use client'
 
+import { formatTimeSinceFr, T } from '@/lib/copy'
 import type { InvalidationAlert } from '@/lib/types'
 
 interface AlertBannerProps {
@@ -50,30 +51,20 @@ function severityStyles(s: InvalidationAlert['severity']): {
       background: '#2a0000',
       borderBottom: '1px solid #5a0000',
       fg: '#f87171',
-      label: '⚠ THESIS INVALIDATED',
+      label: T.alertCriticalLabel,
     }
   }
   return {
     background: '#1a1200',
     borderBottom: '1px solid #3a2800',
     fg: '#fbbf24',
-    label: '⚠ APPROACHING INVALIDATION',
+    label: T.alertWarningLabel,
   }
 }
 
-// Format the time-since-trigger label like "12s ago" / "3m ago"
-// / "1h ago". Anything over 4h shouldn't be shown — the alert
-// will have auto-expired in lib/alerts.ts — but we still cap
-// gracefully here.
-function timeSince(iso: string): string {
-  const diffMs = Date.now() - new Date(iso).getTime()
-  const s = Math.max(0, Math.floor(diffMs / 1000))
-  if (s < 60) return `${s}s ago`
-  const m = Math.floor(s / 60)
-  if (m < 60) return `${m}m ago`
-  const h = Math.floor(m / 60)
-  return `${h}h ago`
-}
+// [F-63] French time-since helper from lib/copy. Centralized so
+// future locale changes flip in one place.
+const timeSince = formatTimeSinceFr
 
 export default function AlertBanner({
   alerts,
@@ -151,7 +142,7 @@ export default function AlertBanner({
             <button
               type="button"
               onClick={() => onDismiss(alert.id)}
-              aria-label="Dismiss alert"
+              aria-label={T.alertDismiss}
               style={{
                 background: 'transparent',
                 border: 'none',
@@ -189,7 +180,7 @@ export default function AlertBanner({
           }}
         >
           <span style={{ color: '#888888', fontSize: '9px', letterSpacing: '0.1em' }}>
-            + {overflow} MORE
+            + {overflow} {T.alertMore}
           </span>
           <button
             type="button"
@@ -205,7 +196,7 @@ export default function AlertBanner({
               cursor: 'pointer',
             }}
           >
-            DISMISS ALL
+            {T.alertDismissAll}
           </button>
         </div>
       )}

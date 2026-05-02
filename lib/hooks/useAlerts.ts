@@ -21,6 +21,10 @@ import {
   getActiveAlerts,
 } from '@/lib/alerts'
 import { parsePrice } from '@/lib/utils'
+import {
+  buildCriticalAlertMessage,
+  buildWarningAlertMessage,
+} from '@/lib/copy'
 import type { AnalysisResult, InvalidationAlert } from '@/lib/types'
 
 interface UseAlertsParams {
@@ -134,10 +138,10 @@ export function useAlerts({
     if (crossed && !alertFiredRef.current.has(criticalKey)) {
       alertFiredRef.current.add(criticalKey)
       const direction = isLong ? 'LONG' : 'SHORT'
-      const cmp = isLong ? 'fell below' : 'rose above'
       createAlert({
         severity: 'CRITICAL',
-        message: `${direction} thesis invalidated — price ${cmp} $${invalidationPrice.toFixed(2)}.`,
+        // [F-63] French copy via centralized builder in lib/copy.
+        message: buildCriticalAlertMessage(direction, invalidationPrice),
         priceAtTrigger: currentPrice,
         analysisId: lastAnalysis.generatedAt,
       })
@@ -149,7 +153,7 @@ export function useAlerts({
       alertFiredRef.current.add(warningKey)
       createAlert({
         severity: 'WARNING',
-        message: `Price within ${distancePct.toFixed(2)}% of invalidation ($${invalidationPrice.toFixed(2)}).`,
+        message: buildWarningAlertMessage(distancePct, invalidationPrice),
         priceAtTrigger: currentPrice,
         analysisId: lastAnalysis.generatedAt,
       })

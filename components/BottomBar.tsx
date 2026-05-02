@@ -107,7 +107,7 @@ export default function BottomBar() {
         {/* OPEN */}
         <div style={blockStyle}>
           <Tooltip
-            content="Today's opening price for gold. Compare with current price to gauge intraday direction. Price above open = buyers in control today."
+            content="Prix d'ouverture de l'or aujourd'hui. À comparer avec le prix courant pour jauger la direction intraday. Prix au-dessus de l'ouverture = acheteurs aux commandes."
           >
             <span style={labelStyle}>OUV</span>
           </Tooltip>
@@ -124,7 +124,7 @@ export default function BottomBar() {
 
         {/* PREV CLOSE */}
         <div style={blockStyle}>
-          <Tooltip content="Yesterday's closing price. The difference between PREV and current price is today's total move so far.">
+          <Tooltip content="Cours de clôture d'hier. La différence entre PRÉC et le prix courant est le mouvement total du jour à ce stade.">
             <span style={labelStyle}>PRÉC</span>
           </Tooltip>
           <span
@@ -141,7 +141,7 @@ export default function BottomBar() {
         {/* DAY CHANGE — formatPrice(change) + parenthesized pct,
             colored by direct sign tint via changeColor. */}
         <div style={blockStyle}>
-          <Tooltip content="Today's price change in dollars and percentage from yesterday's close. Positive = gold up on the day. Negative = gold down on the day.">
+          <Tooltip content="Variation de prix du jour en dollars et en pourcentage depuis la clôture d'hier. Positif = or en hausse sur la journée. Négatif = or en baisse.">
             <span style={labelStyle}>VAR</span>
           </Tooltip>
           <span
@@ -187,7 +187,7 @@ export default function BottomBar() {
 
         {/* 52W H — static placeholder until a real 52-week source lands. */}
         <div style={blockStyle}>
-          <Tooltip content="Highest gold price in the past 52 weeks. A major resistance level — if current price approaches this, expect selling pressure and potential reversal.">
+          <Tooltip content="Plus haut de l'or sur les 52 dernières semaines. Niveau de résistance majeur — si le prix courant s'en approche, attendez-vous à des prises de profits et un retournement potentiel.">
             <span style={labelStyle}>52S H</span>
           </Tooltip>
           <span style={{ ...valueStyle, color: '#4ade80' }}>$3,500.00</span>
@@ -198,7 +198,7 @@ export default function BottomBar() {
         <div style={blockStyle}>
           <Tooltip
             position="left"
-            content="Lowest gold price in the past 52 weeks. A major support level — if current price approaches this, expect buying interest and potential bounce."
+            content="Plus bas de l'or sur les 52 dernières semaines. Niveau de support majeur — si le prix courant s'en approche, attendez-vous à de l'intérêt acheteur et un rebond potentiel."
           >
             <span style={labelStyle}>52S B</span>
           </Tooltip>

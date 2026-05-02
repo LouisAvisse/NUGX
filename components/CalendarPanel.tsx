@@ -22,6 +22,7 @@
 
 import Tooltip from '@/components/Tooltip'
 import { useCalendar } from '@/lib/hooks/useCalendar'
+import { T } from '@/lib/copy'
 import type { EconomicEvent, EventImpact } from '@/lib/types'
 
 // Cap the visible event list. The pane is fixed-height (max
@@ -43,20 +44,21 @@ function formatCountdownChip(e: EconomicEvent): {
   color: string
   pulse: boolean
 } {
+  // [F-21] French countdown copy: "passé" / "dans 23m" / "dans 2h 14m"
   if (!e.isUpcoming) {
-    return { text: 'passed', color: '#666666', pulse: false }
+    return { text: T.calendarPassed, color: '#666666', pulse: false }
   }
   const m = e.minutesUntil
   if (m <= 30) {
-    return { text: `in ${m}m`, color: '#f87171', pulse: true }
+    return { text: `${T.calendarInPrefix} ${m}m`, color: '#f87171', pulse: true }
   }
   if (m <= 60) {
-    return { text: `in ${m}m`, color: '#fbbf24', pulse: false }
+    return { text: `${T.calendarInPrefix} ${m}m`, color: '#fbbf24', pulse: false }
   }
   const hours = Math.floor(m / 60)
   const mins = m % 60
   return {
-    text: `in ${hours}h ${mins}m`,
+    text: `${T.calendarInPrefix} ${hours}h ${mins}m`,
     color: '#555555',
     pulse: false,
   }
@@ -131,7 +133,7 @@ export default function CalendarPanel() {
           fontSize: '9px',
         }}
       >
-        No upcoming gold events today.
+        {T.calendarEmpty}
       </div>
     )
   } else {
@@ -249,7 +251,7 @@ export default function CalendarPanel() {
       >
         <Tooltip
           position="right"
-          content="Upcoming gold-relevant economic events. Filtered for USD/EUR/GBP and titles that historically move gold (Fed, CPI, NFP, FOMC, yields). Refreshes every 60s — never enter a new trade within 45 minutes of a HIGH-impact event."
+          content="Événements économiques à venir pertinents pour l'or. Filtrés sur USD/EUR/GBP et sur les titres qui font historiquement bouger l'or (Fed, CPI, NFP, FOMC, rendements). Rafraîchi toutes les 60s — ne jamais ouvrir de nouvelle position dans les 45 minutes précédant un événement à fort impact."
         >
           <span
             style={{

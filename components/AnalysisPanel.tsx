@@ -1469,7 +1469,7 @@ export default function AnalysisPanel({
           >
             <Tooltip
               position="left"
-              content="How accurate the system's confidence levels have been for your trades. HIGH confidence should be right more often than MEDIUM. If not, adjust your strategy accordingly. Requires 10+ completed trade outcomes."
+              content="Précision historique des niveaux de confiance du système sur vos trades. La confiance HAUTE devrait être plus souvent correcte que MOYENNE. Sinon, ajuster votre stratégie en conséquence. Nécessite au moins 10 résultats de trades clôturés."
             >
               <span
                 style={{

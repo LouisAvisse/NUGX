@@ -216,7 +216,7 @@ export default function PriceBar({
         <div style={{ display: 'flex', flexDirection: 'column' }}>
           <Tooltip
             position="bottom"
-            content="XAU is the ISO code for gold. USD is US Dollar. This shows the cost of one troy ounce of gold in dollars on the spot market."
+            content="XAU est le code ISO de l'or. USD est le dollar américain. Affiche le coût d'une once troy d'or en dollars sur le marché spot."
           >
             <span
               style={{
@@ -231,7 +231,7 @@ export default function PriceBar({
           </Tooltip>
           <Tooltip
             position="bottom"
-            content="Spot price = current market price for immediate delivery. Different from futures which settle at a later date. This is the real-time trading price."
+            content="Prix spot = prix de marché courant pour livraison immédiate. À ne pas confondre avec les futures qui se règlent à une date ultérieure. C'est le prix de trading en temps réel."
           >
             <span style={{ color: '#666666', fontSize: '8px' }}>OR SPOT</span>
           </Tooltip>
@@ -292,7 +292,7 @@ export default function PriceBar({
         <div style={{ display: 'flex', flexDirection: 'column' }}>
           <Tooltip
             position="bottom"
-            content="Session high — the highest price gold has reached today. Acts as intraday resistance. A breakout above this level is a bullish signal."
+            content="Plus haut de session — le prix maximum atteint par l'or aujourd'hui. Agit comme résistance intraday. Un breakout au-dessus de ce niveau est un signal haussier."
           >
             <span style={{ color: '#888888', fontSize: '9px' }}>H</span>
           </Tooltip>
@@ -313,7 +313,7 @@ export default function PriceBar({
         <div style={{ display: 'flex', flexDirection: 'column' }}>
           <Tooltip
             position="bottom"
-            content="Session low — the lowest price gold has reached today. Acts as intraday support. A breakdown below this level is a bearish signal."
+            content="Plus bas de session — le prix minimum atteint par l'or aujourd'hui. Agit comme support intraday. Une cassure sous ce niveau est un signal baissier."
           >
             <span style={{ color: '#888888', fontSize: '9px' }}>L</span>
           </Tooltip>
@@ -337,7 +337,7 @@ export default function PriceBar({
         <div style={{ display: 'flex', flexDirection: 'column' }}>
           <Tooltip
             position="bottom"
-            content="Gold trades 23h/day across global sessions. Tokyo (00-07 UTC): low volume. London (07-12 UTC): high volume. NY/London overlap (12-16 UTC): peak volume, best for day trading. New York (16-21 UTC): high volume, US-driven."
+            content="L'or se trade 23h/jour à travers les sessions mondiales. Tokyo (00-07 UTC) : volume faible. Londres (07-12 UTC) : volume élevé. Overlap NY/Londres (12-16 UTC) : volume pic, idéal pour le day trading. New York (16-21 UTC) : volume élevé, mouvements US-driven."
           >
             <span
               style={{
@@ -426,7 +426,7 @@ export default function PriceBar({
         {onBriefingClick && (
           <Tooltip
             position="bottom"
-            content="Daily London session briefing — auto-generated at 07:00 UTC. Overnight context, key levels, calendar risk, and the single most important thing to watch today."
+            content="Briefing quotidien session de Londres — auto-généré à 07:00 UTC. Contexte de la nuit, niveaux clés, risque calendrier, et le seul élément le plus important à surveiller aujourd'hui."
           >
             <button
               type="button"
@@ -452,7 +452,7 @@ export default function PriceBar({
         {/* 10. LIVE indicator */}
         <Tooltip
           position="left"
-          content="Price refreshes every 30 seconds from gold-api.com. During market hours this reflects the real spot price."
+          content="Cours rafraîchi automatiquement toutes les 30 secondes depuis gold-api.com. Pendant les heures de marché, reflète le prix spot réel."
         >
           <span
             style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}

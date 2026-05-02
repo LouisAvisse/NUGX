@@ -263,7 +263,7 @@ export default function SignalsPanel() {
       <div style={chipStyle}>
         <Tooltip
           position="bottom"
-          content="US Dollar Index — measures USD strength vs 6 major currencies. Gold and DXY are inversely correlated. DXY falling = bullish for gold; DXY rising = bearish."
+          content="US Dollar Index — mesure la force du dollar contre 6 devises majeures. L'or et le DXY sont inversement corrélés. DXY en baisse = haussier pour l'or ; DXY en hausse = baissier."
         >
           <span style={chipLabelStyle}>DXY</span>
         </Tooltip>
@@ -299,7 +299,7 @@ export default function SignalsPanel() {
       <div style={chipStyle}>
         <Tooltip
           position="bottom"
-          content="US 10-Year Treasury yield. Rising yields make bonds more attractive vs gold. Yield up = bearish for gold; yield down = bullish."
+          content="Rendement du Treasury US à 10 ans. Des rendements en hausse rendent les obligations plus attractives que l'or. Rendement en hausse = baissier pour l'or ; rendement en baisse = haussier."
         >
           <span style={chipLabelStyle}>US 10Y</span>
         </Tooltip>
@@ -334,7 +334,7 @@ export default function SignalsPanel() {
       <div style={chipStyle}>
         <Tooltip
           position="bottom"
-          content="Bid-ask spread in dollars — the cost to enter and exit a gold trade. Lower is better."
+          content="Écart bid-ask en dollars — coût pour entrer et sortir d'un trade sur l'or. Plus bas = mieux."
         >
           <span style={chipLabelStyle}>SPREAD</span>
         </Tooltip>
@@ -378,7 +378,7 @@ export default function SignalsPanel() {
       <div style={chipStyle}>
         <Tooltip
           position="bottom"
-          content="Relative Strength Index (14). ≥70 = OVERBOUGHT (potential reversal down). ≤30 = OVERSOLD (potential reversal up). 40-60 = neutral."
+          content="Relative Strength Index (14). ≥70 = SURACHAT (retournement baissier potentiel). ≤30 = SURVENTE (retournement haussier potentiel). 40-60 = neutre."
         >
           <span style={chipLabelStyle}>RSI</span>
         </Tooltip>
@@ -418,7 +418,7 @@ export default function SignalsPanel() {
       <div style={chipStyle}>
         <Tooltip
           position="bottom"
-          content="MACD histogram = MACD line minus signal line. Positive growing = bullish momentum. Negative growing = bearish. A fresh cross is a strong gold day-trade entry signal."
+          content="Histogramme MACD = ligne MACD moins ligne signal. Positif et croissant = momentum haussier. Négatif et croissant = baissier. Un croisement frais est un fort signal d'entrée pour le day trading sur l'or."
         >
           <span style={chipLabelStyle}>MACD</span>
         </Tooltip>
@@ -459,7 +459,7 @@ export default function SignalsPanel() {
       <div style={chipStyle}>
         <Tooltip
           position="bottom"
-          content="Overall 1H trend from EMA20 vs EMA50 alignment + price position. Trade WITH the trend for best results."
+          content="Tendance globale 1H d'après l'alignement EMA20 vs EMA50 + la position du prix. Trader DANS le sens de la tendance pour de meilleurs résultats."
         >
           <span style={chipLabelStyle}>TEND.</span>
         </Tooltip>
@@ -495,7 +495,7 @@ export default function SignalsPanel() {
       <div style={chipStyle}>
         <Tooltip
           position="bottom"
-          content="Exponential Moving Averages 20h / 50h. Price above both = bullish structure. EMA20 crossing EMA50 = trend change signal."
+          content="Moyennes mobiles exponentielles 20h / 50h. Prix au-dessus des deux = structure haussière. EMA20 qui croise EMA50 = signal de changement de tendance."
         >
           <span style={chipLabelStyle}>EMA</span>
         </Tooltip>
@@ -533,7 +533,7 @@ export default function SignalsPanel() {
       <div style={chipStyle}>
         <Tooltip
           position="bottom"
-          content="Average True Range (14) — current volatility in dollars. Use to size stops: stop = entry ± 1-1.5 × ATR."
+          content="Average True Range (14) — volatilité courante en dollars. Sert à dimensionner les stops : stop = entrée ± 1-1.5 × ATR."
         >
           <span style={chipLabelStyle}>ATR</span>
         </Tooltip>
@@ -566,7 +566,7 @@ export default function SignalsPanel() {
       <div style={chipStyle}>
         <Tooltip
           position="bottom"
-          content="Bollinger Bands (20, 2σ). Above upper = overextended. Below lower = oversold. Inside = normal range."
+          content="Bandes de Bollinger (20, 2σ). Au-dessus de la bande haute = suracheté/étendu. Sous la bande basse = survendu. À l'intérieur = range normal."
         >
           <span style={chipLabelStyle}>BB</span>
         </Tooltip>
@@ -619,7 +619,7 @@ export default function SignalsPanel() {
       <div style={chipStyle}>
         <Tooltip
           position="bottom"
-          content="Where current price sits within today's high-low range. 0% = at low, 100% = at high. >70% extended (risky for new longs); <30% = room to run."
+          content="Position du prix courant dans le range haut-bas du jour. 0% = au plus bas, 100% = au plus haut. >70% = étendu (risqué pour de nouveaux longs) ; <30% = encore de la marge."
         >
           <span style={chipLabelStyle}>AMP.</span>
         </Tooltip>
