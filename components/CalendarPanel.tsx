@@ -23,6 +23,7 @@
 import Tooltip from '@/components/Tooltip'
 import { useCalendar } from '@/lib/hooks/useCalendar'
 import { T } from '@/lib/copy'
+import { explainEvent } from '@/lib/eventGlossary'
 import type { EconomicEvent, EventImpact } from '@/lib/types'
 
 // Cap the visible event list. The pane is fixed-height (max
@@ -86,12 +87,25 @@ function formatEventWhen(iso: string): string {
 }
 
 // Build the tooltip body for an event row. The displayed title
-// is often a generic data label ("ISM Manufacturing PMI") that
-// loses context — e.g. when the same hour also has a Trump
-// speech, or when forecast/previous numbers materially change
-// the read. The tooltip surfaces ALL of it: full untruncated
-// title, exact UTC time, impact tier, forecast vs previous so
-// the trader doesn't have to flip to ForexFactory to disambiguate.
+// is often a terse data label ("ISM Manufacturing PMI") that
+// means nothing to a non-economist trader — and the same hour
+// can host materially different events (routine print vs Trump
+// speech vs Powell remarks). The tooltip layers content from
+// most-actionable to most-detailed:
+//
+//   1. Full untruncated title
+//   2. Country · UTC date+time
+//   3. Impact tier in French
+//   4. Forecast vs Previous (when available — gives surprise
+//      direction at a glance)
+//   5. EDUCATIONAL: what the event IS (1 sentence)
+//   6. EDUCATIONAL: what the surprise direction means for gold
+//
+// Sections 5+6 come from lib/eventGlossary.ts which keyword-
+// matches the title against ~25 known event types (Fed, FOMC,
+// CPI, NFP, GDP, PCE, ISM, retail, central-bank speeches,
+// political speeches). When no glossary entry matches the
+// tooltip falls back to metadata-only — never blank.
 function buildEventTooltip(e: EconomicEvent): string {
   const lines: string[] = []
   lines.push(e.title)
@@ -103,10 +117,17 @@ function buildEventTooltip(e: EconomicEvent): string {
         ? 'Impact MOYEN'
         : 'Impact FAIBLE'
   lines.push(impactFr)
-  // Forecast / previous on a single line if either exists. The
-  // pair gives the trader the surprise direction at a glance.
   if (e.forecast !== '—' || e.previous !== '—') {
     lines.push(`Prévi. : ${e.forecast}    Préc. : ${e.previous}`)
+  }
+  // [event glossary] Append the educational layer when we have
+  // a match. Blank line separator so the metadata block reads
+  // distinctly from the explanation.
+  const expl = explainEvent(e.title)
+  if (expl) {
+    lines.push('')
+    lines.push(`Ce que c'est : ${expl.summary}`)
+    lines.push(`Pour l'or : ${expl.gold}`)
   }
   return lines.join('\n')
 }
