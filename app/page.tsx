@@ -36,6 +36,7 @@ import SignalsPanel from '@/components/SignalsPanel'
 import CalendarPanel from '@/components/CalendarPanel'
 import NewsFeed from '@/components/NewsFeed'
 import BottomBar from '@/components/BottomBar'
+import JournalPanel from '@/components/JournalPanel'
 import { useGoldPrice } from '@/lib/hooks/useGoldPrice'
 import { useBreakpoint } from '@/lib/hooks/useBreakpoint'
 import { formatPrice } from '@/lib/utils'
@@ -55,6 +56,10 @@ export default function Page() {
   // visible (the order property does the rearranging).
   const [isLeftOpen, setIsLeftOpen] = useState(true)
   const [isRightOpen, setIsRightOpen] = useState(true)
+
+  // [SPRINT-6] JournalPanel slide-in overlay. Toggled by the J key
+  // and (when added) the JOURNAL chip in PriceBar; ESC closes it.
+  const [isJournalOpen, setIsJournalOpen] = useState(false)
 
   // AI levels lifted from AnalysisPanel so GoldChart can overlay
   // entry/stop/target/resistance/support as horizontal price
@@ -105,13 +110,22 @@ export default function Page() {
     document.title = `${arrow} ${price} (${sign}${pct.toFixed(2)}%) — XAU/USD`
   }, [goldPrice.data?.price, goldPrice.data?.changePct, goldPrice.data])
 
-  // Global keyboard shortcut: R triggers analysis.
+  // Global keyboard shortcuts:
+  //   R          → trigger analysis (CustomEvent → AnalysisPanel)
+  //   J / Shift+J → toggle JournalPanel
+  //   ESC        → close JournalPanel if open
+  // INPUT/TEXTAREA targets are ignored so typing in the journal
+  // form doesn't fire shortcuts on every keystroke.
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       const tag = (e.target as HTMLElement | null)?.tagName ?? ''
       if (tag === 'INPUT' || tag === 'TEXTAREA') return
       if (e.key === 'r' || e.key === 'R') {
         window.dispatchEvent(new CustomEvent('triggerAnalysis'))
+      } else if (e.key === 'j' || e.key === 'J') {
+        setIsJournalOpen((prev) => !prev)
+      } else if (e.key === 'Escape') {
+        setIsJournalOpen(false)
       }
     }
     window.addEventListener('keydown', handleKeyDown)
@@ -269,7 +283,10 @@ export default function Page() {
             gap: '20px',
           }}
         >
-          {[['R', 'analyser']].map(([key, label]) => (
+          {[
+            ['R', 'analyser'],
+            ['J', 'journal'],
+          ].map(([key, label]) => (
             <div
               key={key}
               style={{
@@ -317,6 +334,14 @@ export default function Page() {
       >
         <BottomBar />
       </div>
+
+      {/* [SPRINT-6] JournalPanel slide-in overlay. Renders nothing
+          when isJournalOpen is false; otherwise the fixed-position
+          overlay paints on top of the dashboard. */}
+      <JournalPanel
+        isOpen={isJournalOpen}
+        onClose={() => setIsJournalOpen(false)}
+      />
     </main>
   )
 }
