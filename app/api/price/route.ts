@@ -34,6 +34,7 @@
 import { NextResponse } from 'next/server'
 import YahooFinance from 'yahoo-finance2'
 import type { GoldPrice } from '@/lib/types'
+import { computeBasis, shiftCandles } from '@/lib/priceFrame'
 
 const yahooFinance = new YahooFinance()
 
@@ -195,13 +196,27 @@ export async function GET() {
 
   // Derive OHLC structure from candles. Returns null when the
   // Yahoo fetch was empty.
-  const ohlc = deriveOhlc(candles)
+  // [FIX] Basis-correct the futures candles BEFORE deriving
+  // OHLC so high/low/open/prevClose are reported in spot frame.
+  // Without this the UI displays:
+  //   live ticker:  4615 (gold-api spot)
+  //   day high:     4644 (yahoo GC=F futures)
+  //   change %:     computed against futures prevClose, off by
+  //                 ~$30 in absolute terms.
+  // After this fix all four OHLC fields match the live ticker.
+  // The basis is computed from the latest futures close vs the
+  // current spot; small contango drift over the 2-day candle
+  // window is acceptable and well below trader perceptual bound.
+  const lastFutClose = candles.length > 0 ? (candles[candles.length - 1].close as number | undefined) ?? null : null
+  const basis = computeBasis(lastFutClose, spot)
+  const correctedCandles = shiftCandles(candles, basis)
+  const ohlc = deriveOhlc(correctedCandles)
 
   // Pick the spot price: prefer gold-api, fall back to the latest
-  // Yahoo candle close.
+  // (corrected) Yahoo candle close.
   let livePrice = spot
-  if (livePrice === null && candles.length > 0) {
-    livePrice = candles[candles.length - 1].close as number
+  if (livePrice === null && correctedCandles.length > 0) {
+    livePrice = correctedCandles[correctedCandles.length - 1].close as number
   }
 
   // Both sources failed — return FALLBACK with mock provenance.

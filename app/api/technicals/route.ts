@@ -31,6 +31,11 @@
 
 import { NextResponse } from 'next/server'
 import YahooFinance from 'yahoo-finance2'
+import {
+  computeBasis,
+  fetchSpotXau,
+  shiftCandles,
+} from '@/lib/priceFrame'
 import { EMA, RSI, MACD } from 'technicalindicators'
 import { computeIndicators } from '@/lib/technicals'
 import { detectPatterns, dedupePatterns } from '@/lib/patterns'
@@ -360,22 +365,43 @@ async function fetchTimeframe(
 
 export async function GET() {
   try {
-    // Fire all three fetches in parallel — total wall time ≈ the
-    // slowest single fetch instead of the sum.
-    const [r15, r1h, r4h] = await Promise.all([
+    // Fire all three fetches + the spot fetch in parallel —
+    // total wall time ≈ the slowest single fetch instead of the
+    // sum. fetchSpotXau is ~150ms typical; including it doesn't
+    // dominate. [FIX] spot is needed up-front so we can
+    // basis-correct candles before indicators are computed.
+    const [r15Raw, r1hRaw, r4hRaw, spot] = await Promise.all([
       fetchTimeframe('15M'),
       fetchTimeframe('1H'),
       fetchTimeframe('4H'),
+      fetchSpotXau(),
     ])
 
     // The 1H bundle drives the canonical TechnicalIndicators
     // snapshot (trend/RSI zone/ATR/Bollinger/swing high-low/etc)
     // that pre-existing consumers — SignalsPanel + AnalysisPanel
     // — rely on. If 1H failed entirely we fall through to FALLBACK.
-    if (r1h.candles.length === 0) {
+    if (r1hRaw.candles.length === 0) {
       console.error('[/api/technicals] 1H fetch returned no candles — using FALLBACK')
       return NextResponse.json(FALLBACK, { status: 200 })
     }
+
+    // [FIX] Basis-correct ALL candles to spot frame before any
+    // downstream computation. Subtract (futures - spot) uniformly
+    // so EMAs, swing high/low, Bollinger Bands all come out in
+    // spot frame. RSI/MACD/ATR are direction- and delta-based so
+    // they're unaffected by the constant shift.
+    //
+    // The basis is derived from the latest 1H close (most recent
+    // futures price) vs current spot — small contango drift over
+    // the lookback is acceptable; the relative moves matter for
+    // technicals, the absolute level matters for chart alignment.
+    const lastFutures1h =
+      r1hRaw.candles[r1hRaw.candles.length - 1]?.close ?? null
+    const basis = computeBasis(lastFutures1h, spot)
+    const r15 = { candles: shiftCandles(r15Raw.candles, basis) }
+    const r1h = { candles: shiftCandles(r1hRaw.candles, basis) }
+    const r4h = { candles: shiftCandles(r4hRaw.candles, basis) }
 
     const candles1h = r1h.candles
     const closes1h = candles1h.map((c) => c.close)

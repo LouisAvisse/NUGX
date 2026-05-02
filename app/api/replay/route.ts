@@ -32,6 +32,11 @@
 
 import { NextResponse } from 'next/server'
 import YahooFinance from 'yahoo-finance2'
+import {
+  computeBasis,
+  fetchSpotXau,
+  shiftCandles,
+} from '@/lib/priceFrame'
 
 const yahooFinance = new YahooFinance()
 
@@ -148,20 +153,26 @@ export async function GET(request: Request) {
   }
 
   try {
-    const result = (await yahooFinance.chart('GC=F', {
-      period1,
-      period2,
-      interval: '5m',
-    })) as unknown as { quotes?: YahooCandle[] }
+    // [FIX] Run yahoo + spot fetch in parallel — total wall-time
+    // is the slower of the two instead of the sum. The spot
+    // fetch is ~150ms typical so the cost is amortised.
+    const [chartResult, spot] = await Promise.all([
+      yahooFinance.chart('GC=F', {
+        period1,
+        period2,
+        interval: '5m',
+      }) as unknown as Promise<{ quotes?: YahooCandle[] }>,
+      fetchSpotXau(),
+    ])
 
-    const quotes = result.quotes ?? []
+    const quotes = chartResult.quotes ?? []
 
     // Drop quotes missing OHLC fields, dedupe by timestamp, sort
     // strictly ascending. Same minimum guarantees as
     // /api/technicals' cleanAndSort but tighter: replayPath only
     // reads high/low/close so we ship just those.
     const seen = new Set<number>()
-    const candles: ReplayCandle[] = []
+    const futuresCandles: ReplayCandle[] = []
     for (const q of quotes) {
       if (
         typeof q.high !== 'number' ||
@@ -173,9 +184,22 @@ export async function GET(request: Request) {
       const time = Math.floor(new Date(q.date).getTime() / 1000)
       if (!Number.isFinite(time) || seen.has(time)) continue
       seen.add(time)
-      candles.push({ time, high: q.high, low: q.low, close: q.close })
+      futuresCandles.push({ time, high: q.high, low: q.low, close: q.close })
     }
-    candles.sort((a, b) => a.time - b.time)
+    futuresCandles.sort((a, b) => a.time - b.time)
+
+    // [FIX] Basis-correct candles to spot frame so replayPath
+    // compares them against entry/stop/target — which Claude
+    // computed off SPOT — in the same reference frame. Without
+    // this every futures wick is ~$30 above what the AI's level
+    // strings imply, producing systematic HIT_TARGET on LONGs
+    // and HIT_STOP on SHORTs even when nothing happened.
+    const lastFuturesClose =
+      futuresCandles.length > 0
+        ? futuresCandles[futuresCandles.length - 1].close
+        : null
+    const basis = computeBasis(lastFuturesClose, spot)
+    const candles = shiftCandles(futuresCandles, basis)
 
     const payload: ReplayResponse = {
       candleCount: candles.length,
