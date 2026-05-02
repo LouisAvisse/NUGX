@@ -142,6 +142,56 @@ export function deleteEntry(id: string): void {
   writeAll(all)
 }
 
+// [PHASE-5] Update trade-management state on an open entry.
+// Idempotent + monotonic: only writes when the new state is more
+// advanced than the current one (or the same; STOPPED and
+// TIME_STOP are terminal so they don't get downgraded). Returns
+// true when the entry was actually updated so the caller can
+// fire a notification on first transition.
+export function setMgmtState(
+  id: string,
+  next: import('@/lib/types').TradeMgmtState
+): boolean {
+  const all = readAll()
+  const idx = all.findIndex((e) => e.id === id)
+  if (idx < 0) return false
+  const entry = all[idx]
+  const order: import('@/lib/types').TradeMgmtState[] = [
+    'INITIAL',
+    'TRAIL_60',
+    'PARTIAL_80',
+  ]
+  const prev = entry.mgmtState ?? 'INITIAL'
+  // STOPPED and TIME_STOP are terminal — never overwrite.
+  if (prev === 'STOPPED' || prev === 'TIME_STOP') return false
+  // Monotonic ordering for the running-toward-target states.
+  const prevIdx = order.indexOf(prev)
+  const nextIdx = order.indexOf(next)
+  const isProgression =
+    prevIdx >= 0 && nextIdx > prevIdx
+  const isTerminal = next === 'STOPPED' || next === 'TIME_STOP'
+  if (!isProgression && !isTerminal) return false
+  all[idx] = { ...entry, mgmtState: next }
+  writeAll(all)
+  return true
+}
+
+// Mark an mgmtState as "user has been notified" so the watcher
+// doesn't re-fire the OS notification on every tick. Idempotent.
+export function markMgmtNotified(
+  id: string,
+  state: import('@/lib/types').TradeMgmtState
+): void {
+  const all = readAll()
+  const idx = all.findIndex((e) => e.id === id)
+  if (idx < 0) return
+  const entry = all[idx]
+  const list = entry.mgmtNotifiedStates ?? []
+  if (list.includes(state)) return
+  all[idx] = { ...entry, mgmtNotifiedStates: [...list, state] }
+  writeAll(all)
+}
+
 // Compute realized P&L in USD from an entry's stored fields.
 // Returns 0 for an open trade (no exitPrice yet).
 //

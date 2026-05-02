@@ -594,7 +594,28 @@ export interface JournalEntry {
   exitPrice?: number          // set on close
   createdAt: string           // ISO 8601 — when the trade was opened
   closedAt?: string           // ISO 8601 — set on close
+
+  // [PHASE-5] Trade-management state — advances as price runs
+  // toward target. Persisted so the management chip reflects the
+  // peak state reached (a price that hit 60% then pulled back
+  // doesn't lose its TRAIL_60 milestone). Surfaced visually in
+  // JournalPanel as a chip + driving the auto-suggestion text.
+  //
+  //   INITIAL    : default, no milestone reached
+  //   TRAIL_60   : favorable price reached >= 60% of target
+  //   PARTIAL_80 : favorable price reached >= 80% — partial profit
+  //   STOPPED    : adverse price hit the stop level
+  //   TIME_STOP  : open >8h with <40% to target — thesis stale
+  mgmtState?: TradeMgmtState
+  mgmtNotifiedStates?: TradeMgmtState[]   // dedupe — states already notified
 }
+
+export type TradeMgmtState =
+  | 'INITIAL'
+  | 'TRAIL_60'
+  | 'PARTIAL_80'
+  | 'STOPPED'
+  | 'TIME_STOP'
 
 // ─────────────────────────────────────────────────────────────────
 // [SPRINT-1] Multi-timeframe candles

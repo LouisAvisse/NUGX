@@ -23,6 +23,11 @@
 
 import { useState } from 'react'
 import { useJournal } from '@/lib/hooks/useJournal'
+import {
+  displayMgmtState,
+  useTradeManager,
+} from '@/lib/hooks/useTradeManager'
+import { useGoldPrice } from '@/lib/hooks/useGoldPrice'
 import { useHistory } from '@/lib/hooks/useHistory'
 import { calculatePnL, formatPnL } from '@/lib/journal'
 import { formatPrice, formatDateTime } from '@/lib/utils'
@@ -205,18 +210,45 @@ function EntryCard({
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
+          gap: '6px',
         }}
       >
-        <span
-          style={{
-            color: entry.direction === 'LONG' ? '#4ade80' : '#f87171',
-            fontSize: '10px',
-            fontWeight: 500,
-            letterSpacing: '0.1em',
-          }}
-        >
-          {entry.direction === 'LONG' ? '▲ LONG' : '▼ SHORT'}
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <span
+            style={{
+              color: entry.direction === 'LONG' ? '#4ade80' : '#f87171',
+              fontSize: '10px',
+              fontWeight: 500,
+              letterSpacing: '0.1em',
+            }}
+          >
+            {entry.direction === 'LONG' ? '▲ LONG' : '▼ SHORT'}
+          </span>
+          {/* [PHASE-5] Management chip — only on open entries that
+              have advanced past INITIAL. Palette and label come
+              from displayMgmtState in useTradeManager. */}
+          {isOpen
+            ? (() => {
+                const m = displayMgmtState(entry.mgmtState)
+                if (!m) return null
+                return (
+                  <span
+                    style={{
+                      color: m.color,
+                      background: m.background,
+                      border: m.border,
+                      fontSize: '8px',
+                      padding: '1px 5px',
+                      letterSpacing: '0.08em',
+                      fontFamily: 'var(--font-sans)',
+                    }}
+                  >
+                    {m.label}
+                  </span>
+                )
+              })()
+            : null}
+        </div>
         <span style={{ color: '#444444', fontSize: '9px' }}>{entry.session}</span>
       </div>
 
@@ -579,7 +611,19 @@ function MemoryTab({ patterns }: { patterns: PersonalPatterns | null }) {
 export default function JournalPanel({ isOpen, onClose }: JournalPanelProps) {
   const journal = useJournal()
   const history = useHistory()
+  const goldPrice = useGoldPrice()
   const [activeTab, setActiveTab] = useState<'JOURNAL' | 'MEMORY'>('JOURNAL')
+
+  // [PHASE-5] Trade-manager runs whenever the panel is mounted +
+  // the price ticks. Mutations go through journal storage so the
+  // chip rendered above re-flows naturally on the next refresh.
+  // useGoldPrice is shared with the rest of the dashboard — no
+  // duplicate polling.
+  useTradeManager({
+    entries: journal.entries,
+    livePrice: goldPrice.data?.price ?? null,
+    onUpdate: journal.refresh,
+  })
 
   if (!isOpen) return null
 
