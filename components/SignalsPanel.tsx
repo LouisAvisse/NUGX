@@ -31,10 +31,39 @@ import Tooltip from '@/components/Tooltip'
 // Color helpers
 // ─────────────────────────────────────────────────────────────────
 
-function inverseValueColor(change: number): string {
-  if (change > 0) return '#f87171'
-  if (change < 0) return '#4ade80'
-  return '#e5e5e5'
+// [F-08] DXY / US10Y values were previously tinted with inverse
+// logic — rising = red, falling = green — to encode "bearish for
+// gold". The audit (and screenshot review) flagged this as
+// confusing: traders parse "absolute level red" as "value fell",
+// which is the opposite of what the inverse logic implies. The
+// inverse semantics are still captured in the 8-signal grid in
+// the COPILOT card (where they belong as discrete bull/bear
+// votes); the SignalsPanel value cell now stays neutral white,
+// and the change-percent next to it carries the conventional
+// up=green / down=red color via changeColor (already in use at
+// the changePct site).
+const NEUTRAL_VALUE_COLOR = '#e5e5e5'
+
+// [F-10] Four-tier classification for the VOL chip. The previous
+// binary (ÉLEVÉE / NORMALE) read NORMALE during off-hours, which
+// understates the absent volume. Tied to session name so it
+// updates implicitly with getCurrentSession().
+type SessionLike = { name: string; isHighVolatility: boolean }
+function volForSession(session: SessionLike): {
+  text: string
+  color: string
+} {
+  if (session.isHighVolatility) {
+    return { text: 'ÉLEVÉE', color: '#fbbf24' }
+  }
+  if (session.name === 'Off-hours') {
+    return { text: 'MORTE', color: '#f87171' }
+  }
+  if (session.name === 'Tokyo') {
+    return { text: 'BASSE', color: '#888888' }
+  }
+  // London / New York standalone: standard volume.
+  return { text: 'NORMALE', color: '#b0b0b0' }
 }
 
 function atrContext(atr: number): { text: string; color: string } {
@@ -245,7 +274,9 @@ export default function SignalsPanel() {
             <span
               className={dxyFlash}
               style={{
-                color: dxy ? inverseValueColor(dxy.change) : '#666666',
+                // [F-08] Neutral white — directional read lives on
+                // the changePct chip via changeColor.
+                color: dxy ? NEUTRAL_VALUE_COLOR : '#666666',
                 fontSize: '11px',
                 fontWeight: 500,
                 padding: '1px 3px',
@@ -279,7 +310,8 @@ export default function SignalsPanel() {
             <span
               className={us10yFlash}
               style={{
-                color: us10y ? inverseValueColor(us10y.change) : '#666666',
+                // [F-08] Neutral white — same rationale as DXY.
+                color: us10y ? NEUTRAL_VALUE_COLOR : '#666666',
                 fontSize: '11px',
                 fontWeight: 500,
                 padding: '1px 3px',
@@ -313,23 +345,28 @@ export default function SignalsPanel() {
         </span>
       </div>
 
-      {/* SESSION VOL */}
+      {/* SESSION VOL — [F-10] four-tier classification.
+            ÉLEVÉE = NY/London overlap (peak)
+            NORMALE = London or New York standalone
+            BASSE   = Tokyo (low-volume Asia)
+            MORTE   = Off-hours (Friday close → Sunday open) */}
       <div style={chipStyle}>
         <Tooltip
           position="bottom"
-          content="Expected volume for current session. HIGH during NY/London overlap (12-16 UTC) when both markets are active."
+          content="Volume attendu sur la session courante. ÉLEVÉE pendant l'overlap NY/Londres (12-16 UTC) ; NORMALE en sessions Londres ou NY seules ; BASSE en Tokyo ; MORTE hors-session (week-end / nuit)."
         >
           <span style={chipLabelStyle}>VOL</span>
         </Tooltip>
-        <span
-          style={{
-            color: session.isHighVolatility ? '#fbbf24' : '#b0b0b0',
-            fontSize: '11px',
-            fontWeight: 500,
-          }}
-        >
-          {session.isHighVolatility ? 'ÉLEVÉE' : 'NORMALE'}
-        </span>
+        {(() => {
+          const vol = volForSession(session)
+          return (
+            <span
+              style={{ color: vol.color, fontSize: '11px', fontWeight: 500 }}
+            >
+              {vol.text}
+            </span>
+          )
+        })()}
       </div>
 
       <SectionDivider />

@@ -659,12 +659,23 @@ export default function GoldChart({ levels }: GoldChartProps) {
           </span>
           <span style={{ color: COLOR_EMA20 }}>● EMA20</span>
           <span style={{ color: COLOR_EMA50 }}>● EMA50</span>
-          {/* EMA200 is only meaningful on 1H — fade the swatch on
-              other timeframes so the trader sees at a glance that
-              the line isn't drawn there. */}
-          <span style={{ color: activeTimeframe === '1H' ? COLOR_EMA200 : '#222222' }}>
-            ● EMA200
-          </span>
+          {/* [F-30] EMA200 is only computed for 1H. Previously
+              the swatch faded to #222 on 15M / 4H, which read like
+              "still loading"; now we keep the swatch readable but
+              append "(1H seul)" so the absence is explicit and not
+              ambiguous. */}
+          {activeTimeframe === '1H' ? (
+            <span style={{ color: COLOR_EMA200 }}>● EMA200</span>
+          ) : (
+            <Tooltip
+              position="bottom"
+              content="EMA200 n'est calculée que sur la timeframe 1H — sa structure long-terme n'est pas pertinente sur 15M / 4H avec l'historique de candles disponible."
+            >
+              <span style={{ color: '#444444' }}>
+                ● EMA200 <span style={{ color: '#333333' }}>(1H seul)</span>
+              </span>
+            </Tooltip>
+          )}
           {activePatterns.length > 0 && (
             <Tooltip
               position="bottom"

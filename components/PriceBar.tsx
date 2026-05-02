@@ -163,6 +163,54 @@ export default function PriceBar({
           />
         </div>
 
+        {/* [F-90] Data-source badge — only renders when the price
+            response came from a fallback path. 'partial' = live
+            spot but missing OHLC, 'mock' = both upstreams down +
+            FALLBACK. Anchored next to NUGX so the trader sees the
+            provenance qualifier at a glance without it crowding
+            the price block. Hidden entirely when source is
+            'live' (no shift). */}
+        {data?.meta?.source === 'mock' && (
+          <Tooltip
+            position="bottom"
+            content="Toutes les sources de données prix sont indisponibles. Le tableau de bord affiche des valeurs de secours — ne pas trader sur cette base."
+          >
+            <span
+              style={{
+                background: '#1a0000',
+                color: '#f87171',
+                border: '1px solid #3a1a1a',
+                fontSize: '8px',
+                padding: '2px 6px',
+                letterSpacing: '0.12em',
+                fontWeight: 500,
+              }}
+            >
+              ⚠ {T.badgeMock}
+            </span>
+          </Tooltip>
+        )}
+        {data?.meta?.source === 'partial' && (
+          <Tooltip
+            position="bottom"
+            content="Une des sources de données prix est dégradée (gold-api.com ou yahoo-finance2). Le prix spot ou la structure OHLC peut être stale ; vérifier les niveaux H/L avant d'agir."
+          >
+            <span
+              style={{
+                background: '#1a1200',
+                color: '#fbbf24',
+                border: '1px solid #3a2800',
+                fontSize: '8px',
+                padding: '2px 6px',
+                letterSpacing: '0.12em',
+                fontWeight: 500,
+              }}
+            >
+              ⚠ {T.badgePartial}
+            </span>
+          </Tooltip>
+        )}
+
         {/* 1. SYMBOL — both lines wrapped in tooltips with the
             ISO-code / spot-price explanations from the spec. */}
         <div style={{ display: 'flex', flexDirection: 'column' }}>
