@@ -33,6 +33,7 @@ import { useTechnicals } from '@/lib/hooks/useTechnicals'
 import { useCalendar } from '@/lib/hooks/useCalendar'
 import { useHistory } from '@/lib/hooks/useHistory'
 import { computeCalibration } from '@/lib/calibration'
+import { computeRehearsal, type RehearsalStats } from '@/lib/rehearsal'
 import { formatDateTime, parsePrice } from '@/lib/utils'
 import {
   displayBias,
@@ -516,6 +517,92 @@ function AltScenarioRow({
   )
 }
 
+// [PHASE-6] Rehearsal row — single-line summary of the last N
+// matching setups in the trader's own history. Renders only
+// when the rehearsal stats came back with a real match
+// (>= 3 decided outcomes); below that threshold the row hides
+// to avoid showing a noisy 0%/100% on tiny samples.
+//
+// Visual posture: minimal. One line, slightly muted, sits flush
+// under the trade-params section. Reads as additional context
+// on the same trade card, not a separate widget.
+function RehearsalRow({ stats }: { stats: RehearsalStats }) {
+  // Color follows accuracy ranges so a glance tells the trader
+  // whether their personal base rate supports the trade.
+  // Thresholds align with the calibration card's own bands.
+  const accColor =
+    stats.accuracy === null
+      ? '#888888'
+      : stats.accuracy >= 60
+        ? '#4ade80'
+        : stats.accuracy >= 45
+          ? '#fbbf24'
+          : '#f87171'
+  const matchTooltip =
+    stats.matchKind === 'SETUP'
+      ? "Statistiques basées sur les derniers setups identiques (même nom + même direction) dans votre historique. Source : replay de chemin Phase 1, exclus les anciens résultats avant correction."
+      : "Statistiques basées sur vos derniers trades dans cette session avec la même direction. Match plus large car aucun setup nommé n'a été détecté ou pas assez d'historique de ce setup."
+  return (
+    <div
+      data-section="rehearsal"
+      style={{
+        marginTop: '8px',
+        padding: '6px 0 0 0',
+        borderTop: '1px solid #1a1a1a',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: '8px',
+      }}
+    >
+      <Tooltip position="left" content={matchTooltip}>
+        <span
+          style={{
+            color: '#888888',
+            fontSize: '8px',
+            letterSpacing: '0.1em',
+          }}
+        >
+          ◇ DERNIERS {stats.matchLabel}
+        </span>
+      </Tooltip>
+      <div
+        style={{
+          display: 'flex',
+          gap: '10px',
+          alignItems: 'center',
+          fontSize: '9px',
+          color: '#b0b0b0',
+          fontFeatureSettings: '"tnum"',
+        }}
+      >
+        <span>
+          <span style={{ color: '#4ade80' }}>{stats.wins}V</span>
+          <span style={{ color: '#444444' }}> / </span>
+          <span style={{ color: '#f87171' }}>{stats.losses}P</span>
+          <span style={{ color: '#666666' }}>
+            {' '}
+            ({stats.decidedSamples})
+          </span>
+        </span>
+        <span style={{ color: accColor, fontWeight: 500 }}>
+          {stats.accuracy}%
+        </span>
+        {stats.avgFavorablePct !== null ? (
+          <Tooltip
+            position="bottom"
+            content="Pourcentage moyen du chemin parcouru vers l'objectif sur ces trades — 100% = objectif atteint, 50% = mi-chemin. Inclut les trades open et stoppés. Aide à juger si vos winners courent jusqu'au bout ou si vous laissez de la performance sur la table."
+          >
+            <span style={{ color: '#666666', fontSize: '8px' }}>
+              CHEMIN {stats.avgFavorablePct}%
+            </span>
+          </Tooltip>
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
 // One row in the 8-signal grid. The label is wrapped in a
 // Tooltip so the trader can hover any of the 8 signals to read
 // what it measures and how to interpret the dot color.
@@ -851,6 +938,21 @@ export default function AnalysisPanel({
   useEffect(() => {
     setCalibration(computeCalibration())
   }, [data?.generatedAt, history.history])
+
+  // [PHASE-6] Rehearsal stats — pulled from history every time
+  // the active analysis changes or new outcomes resolve. Pure
+  // derivation, no network. computeRehearsal returns NONE when
+  // there isn't enough matched data, in which case the line
+  // hides entirely.
+  const [rehearsal, setRehearsal] = useState<RehearsalStats | null>(null)
+  useEffect(() => {
+    if (!data) {
+      setRehearsal(null)
+      return
+    }
+    const session = getCurrentSession().name
+    setRehearsal(computeRehearsal(data, session))
+  }, [data, history.history])
 
   // [SPRINT-5] Persist each successful analysis to localStorage
   // history. Keyed off generatedAt so we save once per unique
@@ -1477,6 +1579,15 @@ export default function AnalysisPanel({
             primary trade reads first. */}
         {!showSkeleton && !showError && data?.altScenario ? (
           <AltScenarioRow scenario={data.altScenario} />
+        ) : null}
+
+        {/* [PHASE-6] Rehearsal line — base rate from the trader's
+            own history. Shown only when there's enough matched
+            data (>= 3 decided outcomes); below threshold the
+            block hides entirely so the panel doesn't carry an
+            empty slot. Pure read over localStorage, no network. */}
+        {!showSkeleton && !showError && rehearsal && rehearsal.matchKind !== 'NONE' && rehearsal.accuracy !== null ? (
+          <RehearsalRow stats={rehearsal} />
         ) : null}
       </div>
 
