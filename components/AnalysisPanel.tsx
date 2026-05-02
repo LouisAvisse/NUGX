@@ -380,6 +380,47 @@ function SignalRow({
   )
 }
 
+// [SPRINT-7] Assemble the personalPatterns slice of the analyze
+// request. Pulled out of buildRequest so the try/catch is local
+// — any failure inside (malformed PersonalPatterns shape, missing
+// bucket key, anything thrown) collapses to hasData=false, which
+// the system prompt tells Claude to ignore. Keeps the analysis
+// flow resilient to history-storage corruption.
+function buildPersonalPatterns(
+  patternsData: import('@/lib/types').PersonalPatterns | null,
+  currentSession: string,
+  lastConfluenceScore: number | undefined
+): import('@/lib/types').AnalysisRequest['personalPatterns'] {
+  try {
+    const sessionStats = patternsData?.bySession[currentSession]
+    const confluenceStats =
+      lastConfluenceScore !== undefined
+        ? patternsData?.byConfluenceScore[lastConfluenceScore]
+        : undefined
+    return {
+      hasData: (patternsData?.totalWithOutcome ?? 0) >= 5,
+      totalOutcomes: patternsData?.totalWithOutcome ?? 0,
+      overallAccuracy: patternsData?.overallAccuracy ?? 0,
+      bestSession: patternsData?.bestSession ?? null,
+      bestConfluenceThreshold: patternsData?.bestConfluenceThreshold ?? null,
+      currentSessionAccuracy: sessionStats?.accuracy ?? null,
+      currentConfluenceAccuracy: confluenceStats?.accuracy ?? null,
+      insight: patternsData?.insight ?? '',
+    }
+  } catch {
+    return {
+      hasData: false,
+      totalOutcomes: 0,
+      overallAccuracy: 0,
+      bestSession: null,
+      bestConfluenceThreshold: null,
+      currentSessionAccuracy: null,
+      currentConfluenceAccuracy: null,
+      insight: '',
+    }
+  }
+}
+
 // Parse the first finite number out of a level string.
 // Marcus Reid's confluence engine emits levels as ranges
 // ("3281-3284"), single values ("3265"), or notes with prefixes
@@ -566,6 +607,18 @@ export default function AnalysisPanel({ onLevelsUpdate }: AnalysisPanelProps = {
       // section that lists each one; if the array is empty the
       // section reads "No significant patterns detected".
       detectedPatterns: technicals.patterns ?? [],
+
+      // [SPRINT-7] Personal performance context. Pulled from the
+      // useHistory hook's PersonalPatterns aggregate. Wrapped in
+      // try/catch (via buildPersonalPatterns below) so a malformed
+      // history record never blocks an analysis run — fallback
+      // is hasData=false, which the system prompt tells Claude
+      // to ignore.
+      personalPatterns: buildPersonalPatterns(
+        history.patterns,
+        session.name,
+        data?.confluenceScore
+      ),
     }
   }, [
     goldPrice.data,
@@ -576,6 +629,8 @@ export default function AnalysisPanel({ onLevelsUpdate }: AnalysisPanelProps = {
     technicals.tf4h,
     technicals.patterns,
     calendar.data,
+    history.patterns,
+    data?.confluenceScore,
   ])
 
   // Auto-trigger ONCE on mount, as soon as the price hook has

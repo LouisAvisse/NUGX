@@ -439,6 +439,32 @@ export interface AnalysisRequest {
     significance: string
     description: string
   }[]
+
+  // [SPRINT-7] Personal performance context — derived from the
+  // trader's analysis history (lib/history.ts → PersonalPatterns).
+  // Sent on every analyze request so Claude can calibrate its
+  // recommendation against how this specific trader has actually
+  // performed in the current session / at the current confluence
+  // score / overall.
+  //
+  // hasData = false when there aren't yet enough decided
+  // outcomes (< 5) — the system prompt tells Claude to ignore
+  // every other field in that case. We still send the section
+  // so the message format stays consistent run-to-run.
+  //
+  // currentSessionAccuracy / currentConfluenceAccuracy are null
+  // when the trader has no decided outcomes in that specific
+  // bucket yet — distinct from "0%" which would mislead Claude.
+  personalPatterns: {
+    hasData: boolean
+    totalOutcomes: number
+    overallAccuracy: number
+    bestSession: string | null
+    bestConfluenceThreshold: number | null
+    currentSessionAccuracy: number | null
+    currentConfluenceAccuracy: number | null
+    insight: string
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────

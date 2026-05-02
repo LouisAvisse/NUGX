@@ -90,6 +90,32 @@ HIGH significance pattern on 15M = entry confirmation,
 If a bearish pattern exists on any timeframe against
 your bullish bias, explicitly mention it in RISK field.
 
+PERSONAL PERFORMANCE CONTEXT:
+You may receive the trader's personal performance
+history. If hasData is true, use it to calibrate
+your recommendation:
+
+If currentSessionAccuracy is provided and < 45%:
+  Add a note in the rationale field:
+  'Note: historically lower accuracy in this session
+  for this trader — consider reducing position size.'
+
+If currentConfluenceAccuracy is provided and >= 65%:
+  This is a statistically strong setup for this trader.
+  Mention it briefly in entryTiming.
+
+If bestSession matches current session:
+  This is the trader's best performing session.
+  Acknowledge in entryTiming if confidence is HIGH.
+
+If bestConfluenceThreshold is set and current
+confluenceScore >= bestConfluenceThreshold:
+  This setup meets the trader's historically
+  profitable threshold. Note it.
+
+If hasData is false:
+  Ignore all personal context — not enough data yet.
+
 ENTRY TYPE — classify the entry quality:
 - IDEAL:        conditions are perfect right now. For LONG: price pulling back to EMA20 with RSI 45-55 and macdHistogram still positive. For SHORT: mirror.
 - AGGRESSIVE:   setup is forming, entry is early. Price above/below EMA20 on a fresh BULLISH_CROSS / BEARISH_CROSS in the last 2 candles.
@@ -194,6 +220,43 @@ function buildMultiTimeframeSection(body: AnalysisRequest): string {
     lines.push('15M Timeframe: data unavailable (skip 15M entry confirmation)')
   }
 
+  return lines.join('\n')
+}
+
+// [SPRINT-7] Render the PERSONAL PERFORMANCE HISTORY section.
+// Always emits the section header so message format is consistent
+// run-to-run; the body branches on hasData. When the trader has
+// fewer than 5 decided outcomes the body explicitly tells Claude
+// to ignore the context, which mirrors the system-prompt rule.
+//
+// Accuracy fields are formatted as "X%" or "no data" — never as
+// "0%" — to avoid misleading Claude into thinking 0% means
+// "always wrong" when it actually means "no sample yet".
+function buildPersonalHistorySection(body: AnalysisRequest): string {
+  const p = body.personalPatterns
+  const lines: string[] = ['=== PERSONAL PERFORMANCE HISTORY ===']
+  if (!p.hasData) {
+    lines.push(
+      `No personal history yet (${p.totalOutcomes}/5 outcomes recorded).`,
+      'Ignoring personal context.'
+    )
+    return lines.join('\n')
+  }
+  const fmtPct = (v: number | null) =>
+    v === null ? 'no data' : `${v.toFixed(0)}%`
+  lines.push(
+    `Data available: ${p.totalOutcomes} outcomes`,
+    `Overall accuracy: ${p.overallAccuracy.toFixed(0)}%`,
+    `Current session (${body.session}) accuracy: ${fmtPct(p.currentSessionAccuracy)}`,
+    `Recent confluence-bucket accuracy: ${fmtPct(p.currentConfluenceAccuracy)}`,
+    `Best session: ${p.bestSession ?? 'not yet determined'}`,
+    `Best confluence threshold: ${
+      p.bestConfluenceThreshold === null
+        ? 'not yet determined'
+        : `${p.bestConfluenceThreshold}+/8`
+    }`,
+    `Insight: ${p.insight}`
+  )
   return lines.join('\n')
 }
 
@@ -521,6 +584,8 @@ ${body.topHeadlines.map((n: string, i: number) => `${i + 1}. ${n}`).join('\n')}
 ${buildMultiTimeframeSection(body)}
 
 ${buildPatternsSection(body)}
+
+${buildPersonalHistorySection(body)}
 
 === TASK ===
 Score each of the 8 confluence signals as BULLISH, BEARISH, or NEUTRAL.
