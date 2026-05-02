@@ -28,7 +28,7 @@
 
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import PriceBar from '@/components/PriceBar'
 import TradingViewChart from '@/components/TradingViewChart'
 import AnalysisPanel from '@/components/AnalysisPanel'
@@ -42,7 +42,9 @@ import AlertBanner, {
   WARNING_HEIGHT,
   MORE_ROW_HEIGHT,
 } from '@/components/AlertBanner'
+import BriefingModal from '@/components/BriefingModal'
 import { useAlerts } from '@/lib/hooks/useAlerts'
+import { useBriefing } from '@/lib/hooks/useBriefing'
 import { useGoldPrice } from '@/lib/hooks/useGoldPrice'
 import { useBreakpoint } from '@/lib/hooks/useBreakpoint'
 import { formatPrice } from '@/lib/utils'
@@ -82,6 +84,26 @@ export default function Page() {
     lastAnalysis: lastAnalysisResult,
     currentPrice: goldPrice.data?.price ?? null,
   })
+
+  // [SPRINT-9] Daily session briefing. Self-contained hook —
+  // it fetches its own /api/* upstream data so we don't have
+  // to thread anything through. isBriefingOpen toggles the
+  // modal; auto-opens when a new briefing is generated.
+  const briefing = useBriefing()
+  const [isBriefingOpen, setIsBriefingOpen] = useState(false)
+  const lastAutoOpenedAtRef = useRef<string | null>(null)
+  useEffect(() => {
+    const generatedAt = briefing.briefing?.generatedAt
+    if (!generatedAt) return
+    if (lastAutoOpenedAtRef.current === generatedAt) return
+    lastAutoOpenedAtRef.current = generatedAt
+    // Don't auto-open if the trader is mid-typing somewhere
+    // (journal form, etc) — a sudden modal would be jarring.
+    const active = document.activeElement as HTMLElement | null
+    const tag = active?.tagName ?? ''
+    if (tag === 'INPUT' || tag === 'TEXTAREA') return
+    setIsBriefingOpen(true)
+  }, [briefing.briefing?.generatedAt])
 
   // Reserved layout space below the PriceBar to compensate for
   // the AlertBanner stack. Without this, the fixed-position banner
@@ -162,6 +184,7 @@ export default function Page() {
         setIsJournalOpen((prev) => !prev)
       } else if (e.key === 'Escape') {
         setIsJournalOpen(false)
+        setIsBriefingOpen(false)
       }
     }
     window.addEventListener('keydown', handleKeyDown)
@@ -199,6 +222,8 @@ export default function Page() {
           onLeftToggle={() => setIsLeftOpen((prev) => !prev)}
           onRightToggle={() => setIsRightOpen((prev) => !prev)}
           isStacked={isStacked}
+          hasBriefing={!!briefing.briefing}
+          onBriefingClick={() => setIsBriefingOpen(true)}
         />
       </div>
 
@@ -404,6 +429,17 @@ export default function Page() {
       <JournalPanel
         isOpen={isJournalOpen}
         onClose={() => setIsJournalOpen(false)}
+      />
+
+      {/* [SPRINT-9] BriefingModal — auto-opens when a new
+          briefing is generated; manually toggled via the BRIEFING
+          chip in PriceBar; ESC closes it via the keydown handler
+          above. */}
+      <BriefingModal
+        briefing={briefing.briefing}
+        isGenerating={briefing.isGenerating}
+        isOpen={isBriefingOpen}
+        onClose={() => setIsBriefingOpen(false)}
       />
     </main>
   )

@@ -45,6 +45,14 @@ interface PriceBarProps {
   // force-open and the toggle chips become meaningless. Hide
   // them when isStacked is true.
   isStacked?: boolean
+
+  // [SPRINT-9] BRIEFING button — opens the day's session briefing
+  // modal. `hasBriefing` flips the chip to a green dot indicator
+  // when today's briefing exists; `onBriefingClick` toggles the
+  // modal. Optional so any future caller that doesn't need the
+  // button can omit it.
+  hasBriefing?: boolean
+  onBriefingClick?: () => void
 }
 
 function sessionColor(name: SessionName): string {
@@ -80,6 +88,8 @@ export default function PriceBar({
   onLeftToggle,
   onRightToggle,
   isStacked = false,
+  hasBriefing = false,
+  onBriefingClick,
 }: PriceBarProps) {
   const session = getCurrentSession()
 
@@ -359,6 +369,36 @@ export default function PriceBar({
           >COPILOTE</button>
 
         </div>
+
+        {/* [SPRINT-9] BRIEFING button — opens the daily session
+            briefing modal. Green dot indicator appears next to
+            "BRIEFING" when today's briefing is already generated
+            so the trader knows fresh content is available. */}
+        {onBriefingClick && (
+          <Tooltip
+            position="bottom"
+            content="Daily London session briefing — auto-generated at 07:00 UTC. Overnight context, key levels, calendar risk, and the single most important thing to watch today."
+          >
+            <button
+              type="button"
+              onClick={onBriefingClick}
+              className="terminal-btn"
+              aria-label="Open daily briefing"
+              style={{
+                background: hasBriefing ? '#0a1a0a' : 'transparent',
+                border: `1px solid ${hasBriefing ? '#1a3a1a' : '#222222'}`,
+                color: hasBriefing ? '#4ade80' : '#888888',
+                fontFamily: 'var(--font-sans)',
+                fontSize: '9px',
+                padding: '4px 10px',
+                cursor: 'pointer',
+                letterSpacing: '0.1em',
+              }}
+            >
+              {hasBriefing ? '● BRIEFING' : 'BRIEFING'}
+            </button>
+          </Tooltip>
+        )}
 
         {/* 10. LIVE indicator */}
         <Tooltip
