@@ -177,6 +177,15 @@ export default function GoldChart({ levels }: GoldChartProps) {
   const priceLinesRef = useRef<IPriceLine[]>([])
   const markersRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null)
 
+  // Tracks which timeframe was most recently auto-framed via
+  // fitContent(). When this differs from the active TF the data
+  // effect calls fitContent once and updates the ref; on every
+  // subsequent 60-second technicals poll the ref already matches
+  // so we leave the user's pan/zoom alone. Without this the chart
+  // would snap back to fitContent every minute and erase the
+  // user's manual zoom.
+  const framedTimeframeRef = useRef<Timeframe | null>(null)
+
   // Gates the data-update effects below until the chart instance
   // exists (the dynamic import is async, so the chart isn't ready
   // on first render).
@@ -368,6 +377,7 @@ export default function GoldChart({ levels }: GoldChartProps) {
       ema200Ref.current = null
       priceLinesRef.current = []
       markersRef.current = null
+      framedTimeframeRef.current = null
       setChartReady(false)
     }
   }, [])
@@ -389,10 +399,16 @@ export default function GoldChart({ levels }: GoldChartProps) {
         close: c.close,
       }))
     )
-    // Auto-fit the visible range — fires on initial load AND on
-    // each timeframe switch so the new data starts framed.
-    chartRef.current?.timeScale().fitContent()
-  }, [chartReady, activeData.candles])
+    // Only auto-fit on initial load and on timeframe switch —
+    // not on every 60-second technicals poll. setData preserves
+    // the visible range on its own; fitContent on each refresh
+    // would snap the chart back to "show everything" and erase
+    // any manual zoom the user just applied.
+    if (framedTimeframeRef.current !== activeTimeframe) {
+      framedTimeframeRef.current = activeTimeframe
+      chartRef.current?.timeScale().fitContent()
+    }
+  }, [chartReady, activeData.candles, activeTimeframe])
 
   // Volume bars colored per candle (green tint on up-bars, red on
   // down-bars). Per-point `color` overrides the series default.

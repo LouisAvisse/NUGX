@@ -1,13 +1,26 @@
 // GET /api/news — curated gold/macro headlines.
 //
-// Fetches from newsdata.io (free tier; key in .env.local as
-// NEWSDATA_API_KEY) on every request, filters out malformed
-// rows, caps at 10 articles, and tags each with HIGH / MEDIUM
-// / LOW impact via keyword matchers per .claude/context.md.
+// Source: Google News RSS — completely free, no key, no rate
+// limit beyond reasonable use. Replaces the old newsdata.io
+// upstream (which required a paid registration) with a public
+// XML feed that delivers the same kind of gold + Fed + macro
+// headlines we tag for impact and sentiment.
 //
-// Failure handling: any thrown error returns FALLBACK
-// (empty articles array) with HTTP 200 — the client never
-// crashes; NewsFeed just renders its empty/error state.
+// Why Google News RSS:
+//   • No API key — nothing to secure or rotate.
+//   • Live, ranked aggregation across hundreds of outlets
+//     (Reuters, Bloomberg, FT, MarketWatch, Investing.com, etc.)
+//     — better breadth than any single free-tier API.
+//   • Stable XML schema; no auth headers; CORS-irrelevant
+//     (we call it server-side from this route).
+//
+// Tagging logic (impact + sentiment) is unchanged from the
+// previous newsdata-based implementation — same keyword sets,
+// same downstream NewsArticle shape.
+//
+// Failure handling: any thrown error returns realistic mock
+// articles via buildMockArticles() with HTTP 200, so the
+// dashboard never goes blank on a transient upstream hiccup.
 
 import { NextResponse } from 'next/server'
 import type {
@@ -72,7 +85,7 @@ const BULLISH_GOLD_KEYWORDS = [
   'dxy fall',
   'central bank buy',
   'safe haven',
-  'geopolit', // matches "geopolitical", "geopolitics"
+  'geopolit',
   'fed pause',
   'yield fall',
   'stimulus',
@@ -96,28 +109,18 @@ const BEARISH_GOLD_KEYWORDS = [
 
 function tagSentiment(title: string): NewsSentiment {
   const lower = title.toLowerCase()
-  // Bullish wins over bearish on overlap — gold's safe-haven
-  // narrative typically dominates when both signals fire (e.g.
-  // "rate hike but recession looming").
   if (BULLISH_GOLD_KEYWORDS.some((k) => lower.includes(k))) return 'BULLISH'
   if (BEARISH_GOLD_KEYWORDS.some((k) => lower.includes(k))) return 'BEARISH'
   return 'NEUTRAL'
 }
 
-// Realistic mock articles. Returned when NEWSDATA_API_KEY isn't
-// set, is the placeholder, or the upstream errors. The mix is
-// designed to exercise every UI branch:
-//   - 3 HIGH impact headlines (Fed / yield / war keywords)
-//   - 3 MEDIUM impact headlines
-//   - 2 LOW impact (analyst-flavored) headlines
-//   - sentiment spans BULLISH / BEARISH / NEUTRAL
-// Timestamps are computed at request time so they always look
-// recent and the relative-time formatters in NewsFeed have
-// sensible inputs.
+// Realistic mock articles — only used when the Google News RSS
+// fetch fails (network blip, DNS, parse error). The mix exercises
+// every UI branch: 3 HIGH / 3 MEDIUM / 2 LOW impact + a balanced
+// BULLISH / BEARISH / NEUTRAL sentiment spread. Timestamps are
+// computed at request time so the news list always reads "live".
 function buildMockArticles(): NewsArticle[] {
   const now = Date.now()
-  // Spread the timestamps across the last 6 hours so the news
-  // list reads like a typical session, freshest first.
   const ago = (minutes: number) =>
     new Date(now - minutes * 60_000).toISOString()
   return [
@@ -188,108 +191,114 @@ function buildMockArticles(): NewsArticle[] {
   ]
 }
 
-// Mock response — realistic enough that the UI looks alive
-// without a real API key, while keeping the real-API path in
-// place for when a key is supplied later.
-const MOCK_RESPONSE: NewsResponse = { articles: [] } // built lazily below
-
-// True placeholder fallback — empty list. Only used as a
-// last-resort if even the mock builder throws (it shouldn't).
-const FALLBACK: NewsResponse = { articles: [] }
-
-// Detect a missing or placeholder NEWSDATA_API_KEY. The default
-// value in .env.example is "your_key_here" — we treat that
-// (and any empty value) as "no key", which short-circuits the
-// upstream call and returns realistic mock data instead.
-// `key is string` type predicate lets TypeScript narrow `key`
-// to a defined string after a passing check.
-function hasRealKey(key: string | undefined): key is string {
-  return !!key && key !== 'your_key_here' && key.trim().length > 0
+// Decode the handful of HTML entities Google News RSS actually
+// emits in titles. Full-spec HTML decoding would need a library;
+// in practice the feed only uses these five plus the numeric
+// &#39; (apostrophe).
+function decodeEntities(s: string): string {
+  return s
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, ' ')
 }
 
-// Suppress unused-warning on the lazy mock placeholder while
-// keeping it documented above.
-void MOCK_RESPONSE
-
-// Minimal upstream row shape we care about. newsdata.io returns
-// many more fields; we only read these.
-interface NewsdataRow {
-  title?: string
-  source_name?: string
-  pubDate?: string
-  link?: string
+// Pull the inner text of a single tag out of an item's XML body.
+// Returns undefined when the tag is absent. Non-greedy match
+// avoids accidentally swallowing past a sibling tag.
+function pickTag(itemXml: string, tag: string): string | undefined {
+  const re = new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`)
+  const m = itemXml.match(re)
+  return m ? decodeEntities(m[1].trim()) : undefined
 }
+
+// Strip a trailing " - SOURCE NAME" suffix from a Google News
+// title. The feed appends the source to the title with a hyphen
+// separator; the dedicated <source> tag carries the same name
+// cleanly, so we trim the duplicate from the headline.
+function stripSourceSuffix(title: string, source: string | undefined): string {
+  if (!source) return title
+  const suffix = ` - ${source}`
+  return title.endsWith(suffix) ? title.slice(0, -suffix.length) : title
+}
+
+// Google News RSS query — same intent as the old newsdata.io
+// query: gold spot keywords + Fed/FOMC + macro inflation. The
+// hl/gl/ceid params lock to US English so headlines arrive in
+// the same language as the impact-keyword matchers expect.
+const GOOGLE_NEWS_RSS = (() => {
+  const url = new URL('https://news.google.com/rss/search')
+  url.searchParams.set(
+    'q',
+    'gold price OR XAUUSD OR "Federal Reserve" OR FOMC OR inflation'
+  )
+  url.searchParams.set('hl', 'en-US')
+  url.searchParams.set('gl', 'US')
+  url.searchParams.set('ceid', 'US:en')
+  return url.toString()
+})()
+
+// How many articles to surface to the UI. Matches the old
+// behaviour (newsdata responses were sliced at 10).
+const MAX_ARTICLES = 10
 
 export async function GET() {
-  const key = process.env.NEWSDATA_API_KEY
-
-  // No real key configured → short-circuit to realistic mock
-  // articles. The dashboard UI then exercises every branch
-  // (sentiment dots, impact badges, ratio bar, filter chips)
-  // without the user having to provision a newsdata.io account
-  // first.
-  if (!hasRealKey(key)) {
-    return NextResponse.json({
-      articles: buildMockArticles(),
-    } satisfies NewsResponse)
-  }
-
   try {
-
-    // Build the URL via URL/URLSearchParams so values are
-    // properly percent-encoded (especially the quoted phrase
-    // "Federal Reserve" which contains a space).
-    const url = new URL('https://newsdata.io/api/1/news')
-    url.searchParams.set('apikey', key)
-    url.searchParams.set('q', 'gold XAU "Federal Reserve" inflation')
-    url.searchParams.set('language', 'en')
-    url.searchParams.set('category', 'business')
-
-    const res = await fetch(url.toString(), {
+    const res = await fetch(GOOGLE_NEWS_RSS, {
       // Hook polls every 15min — no Next data cache wanted.
       next: { revalidate: 0 },
-      headers: { Accept: 'application/json' },
+      // Some Google endpoints are picky about the UA; a generic
+      // browser-style UA avoids the occasional 403.
+      headers: {
+        Accept: 'application/rss+xml, application/xml, text/xml',
+        'User-Agent':
+          'Mozilla/5.0 (compatible; NUGX-Dashboard/1.0; +https://example.com)',
+      },
     })
 
     if (!res.ok) {
-      throw new Error(`newsdata responded ${res.status}`)
+      throw new Error(`google news rss responded ${res.status}`)
     }
 
-    const raw = await res.json()
-
-    if (raw.status !== 'success' || !Array.isArray(raw.results)) {
-      throw new Error('Unexpected newsdata response shape')
+    const xml = await res.text()
+    if (!xml || !xml.includes('<item>')) {
+      throw new Error('Empty or malformed RSS feed')
     }
 
-    // Drop rows missing the must-have fields, cap at 10, and
-    // map into NewsArticle.
-    const articles: NewsArticle[] = (raw.results as NewsdataRow[])
-      .filter((r) => !!r.title && !!r.link)
-      .slice(0, 10)
-      .map((r) => ({
-        title: r.title!,
-        source: r.source_name ?? 'Unknown',
-        // pubDate format is "YYYY-MM-DD HH:mm:ss"; new Date()
-        // accepts that and toISOString() normalizes for the
-        // formatTime helper.
-        publishedAt: new Date(r.pubDate ?? Date.now()).toISOString(),
-        url: r.link!,
-        impact: tagImpact(r.title!),
-        // Directional sentiment for gold — drives the colored
-        // dot in NewsFeed and the bullish/bearish counts in
-        // the analyze request body.
-        sentiment: tagSentiment(r.title!),
-      }))
+    // Split into <item>…</item> blocks. Regex is fine here —
+    // RSS items don't nest, so the non-greedy match is unambiguous.
+    const itemMatches = xml.match(/<item>[\s\S]*?<\/item>/g) ?? []
+    const articles: NewsArticle[] = itemMatches
+      .slice(0, MAX_ARTICLES * 2) // over-fetch in case some rows are malformed
+      .map((itemXml) => {
+        const rawTitle = pickTag(itemXml, 'title') ?? ''
+        const link = pickTag(itemXml, 'link') ?? ''
+        const pubDate = pickTag(itemXml, 'pubDate')
+        const source = pickTag(itemXml, 'source')
+        const title = stripSourceSuffix(rawTitle, source)
+        return {
+          title,
+          source: source ?? 'Unknown',
+          publishedAt: new Date(pubDate ?? Date.now()).toISOString(),
+          url: link,
+          impact: tagImpact(title),
+          sentiment: tagSentiment(title),
+        } satisfies NewsArticle
+      })
+      .filter((a) => !!a.title && !!a.url)
+      .slice(0, MAX_ARTICLES)
+
+    if (articles.length === 0) {
+      throw new Error('No articles parsed from RSS feed')
+    }
 
     return NextResponse.json({ articles } satisfies NewsResponse)
   } catch (err) {
-    // Real key was provided but the upstream call failed (rate
-    // limit, network, parse error, etc). Return realistic mock
-    // articles rather than an empty list so the dashboard
-    // doesn't go blank — surfaces "API connected but data
-    // currently unavailable" via a richer surface. Switch back
-    // to FALLBACK if we ever want a clear "broken state" signal
-    // in the UI.
+    // Network/parse failure — return realistic mock articles so
+    // the dashboard doesn't go blank. The real-API path is
+    // covered above; this branch only fires on outage.
     console.error('[/api/news] fetch failed:', err)
     return NextResponse.json(
       { articles: buildMockArticles() } satisfies NewsResponse,
@@ -297,8 +306,3 @@ export async function GET() {
     )
   }
 }
-
-// Reference FALLBACK so it stays exported as a module-scope
-// constant (used historically; kept for the future "show empty
-// state instead of mock" branch).
-void FALLBACK
