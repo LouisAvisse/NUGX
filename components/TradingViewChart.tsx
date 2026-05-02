@@ -51,6 +51,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import Tooltip from '@/components/Tooltip'
 import { useTechnicals } from '@/lib/hooks/useTechnicals'
+import { displayTrendShort, T } from '@/lib/copy'
 import type {
   ChartCandle,
   ChartLevels,
@@ -546,9 +547,9 @@ export default function GoldChart({ levels }: GoldChartProps) {
       priceLinesRef.current.push(line)
     }
 
-    addLine(levels.entry, COLOR_ENTRY, LINE_STYLE_DASHED, 'ENTRY')
-    addLine(levels.stop, COLOR_STOP, LINE_STYLE_DASHED, 'STOP')
-    addLine(levels.target, COLOR_TARGET, LINE_STYLE_DASHED, 'TARGET')
+    addLine(levels.entry, COLOR_ENTRY, LINE_STYLE_DASHED, T.chartEntry)
+    addLine(levels.stop, COLOR_STOP, LINE_STYLE_DASHED, T.chartStop)
+    addLine(levels.target, COLOR_TARGET, LINE_STYLE_DASHED, T.chartTarget)
     addLine(levels.resistance, COLOR_RESISTANCE, LINE_STYLE_DOTTED, 'RES')
     addLine(levels.support, COLOR_SUPPORT, LINE_STYLE_DOTTED, 'SUP')
     addLine(levels.swingHigh, COLOR_SWING, LINE_STYLE_DOTTED, '')
@@ -667,19 +668,28 @@ export default function GoldChart({ levels }: GoldChartProps) {
           {activePatterns.length > 0 && (
             <Tooltip
               position="bottom"
-              content="Candlestick patterns detected on this timeframe. Arrows show pattern location on the candles. Bullish patterns shown below candles in green, bearish above in red, neutral (compression) as amber circles."
+              content="Motifs de chandelles détectés sur cette timeframe. Les flèches indiquent l'emplacement du motif sur les bougies. Motifs haussiers en vert sous la bougie, baissiers en rouge au-dessus, neutres (compression) en cercles ambres."
             >
               <span style={{ color: COLOR_NEUTRAL }}>
-                ● {activePatterns.length} PATTERN{activePatterns.length > 1 ? 'S' : ''}
+                ● {activePatterns.length}{' '}
+                {activePatterns.length > 1
+                  ? T.chartPatternsPlural
+                  : T.chartPatternsSingular}
               </span>
             </Tooltip>
           )}
-          {hasEntry && <span style={{ color: COLOR_ENTRY }}>┄ ENTRY</span>}
-          {hasStop && <span style={{ color: COLOR_STOP }}>┄ STOP</span>}
-          {hasTarget && <span style={{ color: COLOR_TARGET }}>┄ TARGET</span>}
+          {hasEntry && (
+            <span style={{ color: COLOR_ENTRY }}>┄ {T.chartEntry}</span>
+          )}
+          {hasStop && (
+            <span style={{ color: COLOR_STOP }}>┄ {T.chartStop}</span>
+          )}
+          {hasTarget && (
+            <span style={{ color: COLOR_TARGET }}>┄ {T.chartTarget}</span>
+          )}
           {technicals.loading && (
-            <span style={{ marginLeft: 'auto', color: '#333333', letterSpacing: '0.12em' }}>
-              UPDATING...
+            <span style={{ marginLeft: 'auto', color: '#666666', letterSpacing: '0.12em' }}>
+              {T.chartUpdating}
             </span>
           )}
         </div>
@@ -702,21 +712,38 @@ export default function GoldChart({ levels }: GoldChartProps) {
             letterSpacing: '0.1em',
           }}
         >
-          <span style={{ color: trendColor(trend4h) }}>
-            4H: {trend4h.replace('TREND', '')}
-          </span>
-          <span style={{ color: trendColor(trend1h) }}>
-            1H: {trend1h.replace('TREND', '')}
-          </span>
-          <span style={{ color: trendColor(trend15) }}>
-            15M: {trend15.replace('TREND', '')}
-          </span>
+          <Tooltip
+            position="bottom"
+            content="Tendance 4H — filtre macro le plus important. Ne jamais trader contre cette direction."
+          >
+            <span style={{ color: trendColor(trend4h) }}>
+              4H: {displayTrendShort(trend4h)}
+            </span>
+          </Tooltip>
+          <Tooltip
+            position="bottom"
+            content="Tendance 1H — timeframe principal du setup et des niveaux d'entrée."
+          >
+            <span style={{ color: trendColor(trend1h) }}>
+              1H: {displayTrendShort(trend1h)}
+            </span>
+          </Tooltip>
+          <Tooltip
+            position="bottom"
+            content="Tendance 15M — timing d'entrée. Idéal quand alignée avec 1H et 4H."
+          >
+            <span style={{ color: trendColor(trend15) }}>
+              15M: {displayTrendShort(trend15)}
+            </span>
+          </Tooltip>
           {aligned && (
             <Tooltip
               position="bottom"
-              content="All three timeframes (4H, 1H, 15M) show the same trend direction. This is a high-conviction confluence signal — the strongest technical setup the system can identify."
+              content="Les trois timeframes (4H, 1H, 15M) pointent dans la même direction. Signal de confluence à haute conviction — le setup technique le plus fort que le système peut identifier."
             >
-              <span style={{ color: alignedColor, fontWeight: 500 }}>● ALIGNED</span>
+              <span style={{ color: alignedColor, fontWeight: 500 }}>
+                {T.chartAligned}
+              </span>
             </Tooltip>
           )}
         </div>

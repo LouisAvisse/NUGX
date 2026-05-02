@@ -251,6 +251,15 @@ NOW: <one sentence describing what is moving gold right now>
 RISK: <the single biggest threat to this trade>
 TRIGGER: <the specific price action or event that would confirm the entry is valid right now>
 
+LANGUAGE — the dashboard is French-localized. Write the human-readable narrative fields IN FRENCH so they read natively in the COPILOTE card:
+- catalyst (the NOW: / RISK: / TRIGGER: lines — but keep these three labels as "NOW:" / "RISK:" / "TRIGGER:" exactly so the panel parser still splits them; only the sentences after each label translate)
+- rationale
+- entryTiming
+- exitPlan
+- holdTime (e.g. "1-3 heures" instead of "1-3 hours")
+
+Keep all enum values + level strings + trader vocabulary in their canonical English form: bias (BULLISH/BEARISH/NEUTRAL), confidence (HIGH/MEDIUM/LOW), recommendation (LONG/SHORT/FLAT), entryType (IDEAL/AGGRESSIVE/WAIT), marketCondition (TRENDING_UP/etc), riskReward ("1:2.4"), and prices ("3281-3284"). Those flow through type-safe enums + UI logic that the dashboard translates at render time.
+
 OUTPUT: a single valid JSON object and nothing else. No markdown, no code fences, no explanation. Raw JSON.
 
 JSON shape (every field required):
@@ -488,28 +497,31 @@ function buildMockAnalysis(req: AnalysisRequest): AnalysisResult {
           ? 'BREAKOUT_WATCH'
           : 'RANGING'
 
-  const directionWord = isBullish ? 'higher' : isBearish ? 'lower' : 'sideways'
+  // [F-82] French copy in the mock catalyst/rationale/entryTiming/
+  // exitPlan so the dashboard reads coherently when ANTHROPIC_API_KEY
+  // is missing. Matches the LANGUAGE rule we now give Claude.
+  const directionWord = isBullish ? 'à la hausse' : isBearish ? 'à la baisse' : 'sans direction'
   const catalystSentence =
     !req.clearToTrade
-      ? `Calendar gate is closed — ${req.warningMessage ?? 'high-impact event imminent'}`
-      : `Macro tape ${dxyBullish ? 'supportive (DXY soft)' : 'against (DXY firm)'}, ` +
-        `yields ${yieldBullish ? 'easing' : 'rising'}, technicals ${trendBullish ? 'aligned' : 'mixed'}`
+      ? `Calendrier bloqué — ${req.warningMessage ?? 'événement à fort impact imminent'}`
+      : `Macro ${dxyBullish ? 'favorable (DXY mou)' : 'défavorable (DXY ferme)'}, ` +
+        `rendements ${yieldBullish ? 'en repli' : 'en hausse'}, technique ${trendBullish ? 'alignée' : 'mitigée'}`
 
   const riskSentence = !req.clearToTrade
-    ? `${req.nextEventTitle ?? 'Pending release'} in ${req.nextEventMinutes ?? '?'} min`
+    ? `${req.nextEventTitle ?? 'Donnée à venir'} dans ${req.nextEventMinutes ?? '?'} min`
     : overbought
-      ? 'RSI overbought — pullback risk'
+      ? 'RSI suracheté — risque de pullback'
       : isBullish
-        ? `Failure to hold ${fmt(req.ema20 || p)}; DXY reversal`
-        : `Reversal back above ${fmt(req.ema20 || p)}; DXY rally`
+        ? `Cassure de ${fmt(req.ema20 || p)} ; retournement DXY`
+        : `Reprise au-dessus de ${fmt(req.ema20 || p)} ; rebond DXY`
 
   const triggerSentence = !req.clearToTrade
-    ? 'Wait for the event to print, then reassess'
+    ? "Attendre la sortie de la donnée puis réévaluer"
     : isBullish
-      ? `Hold above ${fmt(req.ema20 || p - atr)} with MACD histogram expanding`
+      ? `Tenue au-dessus de ${fmt(req.ema20 || p - atr)} avec histogramme MACD en expansion`
       : isBearish
-        ? `Reject ${fmt(req.ema20 || p + atr)} with MACD histogram contracting`
-        : 'Range bound — wait for break of swing high/low'
+        ? `Rejet de ${fmt(req.ema20 || p + atr)} avec histogramme MACD en contraction`
+        : "Range — attendre la cassure d'un swing high/low"
 
   return {
     bias,
@@ -520,11 +532,11 @@ function buildMockAnalysis(req: AnalysisRequest): AnalysisResult {
     target: target.toFixed(0),
     resistance: resistance.toFixed(0),
     support: support.toFixed(0),
-    catalyst: `NOW: Gold tape leaning ${directionWord} on session. RISK: ${riskSentence}. TRIGGER: ${triggerSentence}.`,
+    catalyst: `NOW: Or orienté ${directionWord} sur la session. RISK: ${riskSentence}. TRIGGER: ${triggerSentence}.`,
     rationale:
       recommendation === 'FLAT'
-        ? 'Insufficient confluence or calendar block — stand aside.'
-        : `Structure aligns ${isBullish ? 'long' : 'short'} with ${atr.toFixed(2)} ATR room to ${target.toFixed(0)}.`,
+        ? "Confluence insuffisante ou calendrier bloqué — rester à l'écart."
+        : `Structure alignée ${isBullish ? 'à la hausse' : 'à la baisse'} avec ${atr.toFixed(2)} d'ATR de marge jusqu'à ${target.toFixed(0)}.`,
     generatedAt: new Date().toISOString(),
     confluenceScore: isBullish ? bullCount : 8 - bullCount,
     confluenceTotal: 8,
@@ -542,18 +554,18 @@ function buildMockAnalysis(req: AnalysisRequest): AnalysisResult {
           : 'NEUTRAL',
       calendar: calendarBullish ? 'BULLISH' : 'BEARISH',
     },
-    holdTime: '1-3 hours',
+    holdTime: '1-3 heures',
     riskReward: '1:2',
     entryTiming:
       entryType === 'IDEAL'
-        ? `Enter on next pullback to ${fmt(req.ema20 || p)} with confirming candle close.`
+        ? `Entrer au prochain pullback vers ${fmt(req.ema20 || p)} avec une bougie de confirmation.`
         : entryType === 'AGGRESSIVE'
-          ? `Setup forming — wait for retest before sizing up.`
-          : `Conditions not aligned. Stand aside until RSI normalizes.`,
+          ? "Setup en formation — attendre le retest avant d'augmenter la taille."
+          : "Conditions non alignées. Rester à l'écart jusqu'à normalisation du RSI.",
     exitPlan:
       !req.clearToTrade
-        ? `Stay flat through ${req.nextEventTitle ?? 'pending release'}; reassess after.`
-        : `Trail stop on each new ${isBullish ? 'higher' : 'lower'} swing; full exit at target or session close.`,
+        ? `Rester flat pendant ${req.nextEventTitle ?? 'la donnée à venir'} ; réévaluer après.`
+        : `Trail stop à chaque nouveau swing ${isBullish ? 'haussier' : 'baissier'} ; sortie complète à l'objectif ou en clôture de session.`,
     entryType,
     invalidationLevel: typeof invalidation === 'number' ? invalidation.toFixed(0) : '——',
     marketCondition,

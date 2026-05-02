@@ -32,7 +32,13 @@ import { useTechnicals } from '@/lib/hooks/useTechnicals'
 import { useCalendar } from '@/lib/hooks/useCalendar'
 import { useHistory } from '@/lib/hooks/useHistory'
 import { computeCalibration } from '@/lib/calibration'
-import { biasColor, formatDateTime, parsePrice } from '@/lib/utils'
+import { formatDateTime, parsePrice } from '@/lib/utils'
+import {
+  displayBias,
+  displayConfidence,
+  displaySignalShort,
+  T,
+} from '@/lib/copy'
 import { getCurrentSession } from '@/lib/session'
 import type {
   AnalysisRequest,
@@ -190,11 +196,9 @@ function signalDotColor(b: Bias): string {
   if (b === 'BEARISH') return '#f87171'
   return '#b0b0b0'
 }
-function signalShortText(b: Bias): string {
-  if (b === 'BULLISH') return 'BULL'
-  if (b === 'BEARISH') return 'BEAR'
-  return 'NEUT'
-}
+// [F-37, F-44] Delegates to the centralized helper in lib/copy.ts.
+// Kept as a local re-export so existing call sites don't churn.
+const signalShortText = displaySignalShort
 
 // Display-friendly label for each signal key (French).
 const SIGNAL_LABELS: Record<keyof SignalBreakdown, string> = {
@@ -503,7 +507,7 @@ function CalibrationRows({
                 letterSpacing: '0.08em',
               }}
             >
-              {row.label}
+              {displayConfidence(row.label)}
             </span>
             <div
               style={{
@@ -536,14 +540,14 @@ function CalibrationRows({
         )
       })}
 
-      {/* Calibration insight — branches per the spec. */}
+      {/* Calibration insight — branches per the spec, French copy. */}
       {(() => {
         const high = calibration.highConfidenceAccuracy
         const med = calibration.mediumConfidenceAccuracy
         if (allNull) {
           return (
             <div style={{ color: '#333333', fontSize: '9px', marginTop: '8px' }}>
-              More data needed per confidence level.
+              {T.calibrationInsightAllNull}
             </div>
           )
         }
@@ -557,9 +561,7 @@ function CalibrationRows({
                 lineHeight: 1.4,
               }}
             >
-              ⚠ System accuracy below 50% on HIGH confidence. Review trade
-              conditions and consider only trading at 8/8 confluence until
-              accuracy improves.
+              {T.calibrationInsightHighLow}
             </div>
           )
         }
@@ -573,15 +575,14 @@ function CalibrationRows({
                 lineHeight: 1.4,
               }}
             >
-              ⚠ HIGH confidence underperforming MEDIUM — reduce position size on
-              HIGH confidence signals.
+              {T.calibrationInsightHighUnderMedium}
             </div>
           )
         }
         if (high !== null && med !== null && high >= med) {
           return (
             <div style={{ color: '#4ade80', fontSize: '9px', marginTop: '8px' }}>
-              HIGH confidence is performing as expected.
+              {T.calibrationInsightOk}
             </div>
           )
         }
@@ -1039,7 +1040,9 @@ export default function AnalysisPanel({
                 position="left"
                 content="Biais directionnel sur l'or pour la session courante. BULLISH = on attend une hausse. BEARISH = on attend une baisse. NEUTRAL = pas de direction claire, rester flat."
               >
-                <span style={biasBadgeStyle(data.bias)}>{data.bias}</span>
+                <span style={biasBadgeStyle(data.bias)}>
+                  {displayBias(data.bias)}
+                </span>
               </Tooltip>
             ) : (
               <span style={{ color: '#666666', fontSize: '9px' }}>——</span>
@@ -1054,7 +1057,7 @@ export default function AnalysisPanel({
                 }}
               >
                 <span style={{ color: confidenceColor(data.confidence) }}>
-                  {data.confidence}
+                  {displayConfidence(data.confidence)}
                 </span>{' '}
                 <Tooltip
                   position="left"
@@ -1480,7 +1483,7 @@ export default function AnalysisPanel({
               </span>
             </Tooltip>
             <span style={{ color: '#444444', fontSize: '9px' }}>
-              {calibration.recordsWithOutcome} outcomes
+              {calibration.recordsWithOutcome} {T.calibrationOutcomes}
             </span>
           </div>
 
@@ -1488,7 +1491,7 @@ export default function AnalysisPanel({
             // Not yet calibrated — show progress toward 10 outcomes.
             <>
               <div style={{ color: '#444444', fontSize: '9px', marginBottom: '4px' }}>
-                {calibration.recordsWithOutcome}/10 outcomes needed
+                {calibration.recordsWithOutcome}/10 {T.calibrationOutcomesNeeded}
               </div>
               <div
                 style={{

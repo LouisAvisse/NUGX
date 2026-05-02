@@ -24,6 +24,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { getCurrentSession } from '@/lib/session'
 import { formatPrice, formatChange, formatPct, changeColor } from '@/lib/utils'
+import { displaySession, T } from '@/lib/copy'
 import type { GoldPrice, SessionName } from '@/lib/types'
 import Tooltip from '@/components/Tooltip'
 
@@ -203,7 +204,7 @@ export default function PriceBar({
         >
           {error ? (
             <span style={{ color: '#f87171', fontSize: '11px' }}>
-              UNAVAILABLE
+              {T.unavailable}
             </span>
           ) : loading && !data ? (
             <Skeleton width={120} height={20} />
@@ -306,7 +307,7 @@ export default function PriceBar({
                   ●
                 </span>
               )}
-              {session.name}
+              {displaySession(session.name)}
             </span>
           </Tooltip>
         </div>

@@ -23,6 +23,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNews } from '@/lib/hooks/useNews'
 import { formatTime } from '@/lib/utils'
+import { T } from '@/lib/copy'
 import type { ImpactLevel, NewsArticle, NewsSentiment } from '@/lib/types'
 
 // Filter modes.
@@ -206,15 +207,15 @@ export default function NewsFeed() {
     return { bull, bear, neut, total: articles.length }
   }, [articles])
 
-  // Flow verdict — bull > bear+1 BULLISH FLOW; bear > bull+1
-  // BEARISH FLOW; everything else MIXED.
+  // Flow verdict — bull > bear+1 FLUX HAUSSIER; bear > bull+1
+  // FLUX BAISSIER; everything else MITIGÉ.
   const verdict = useMemo(() => {
     const { bull, bear } = sentimentCounts
     if (bull > bear + 1)
-      return { text: 'BULLISH FLOW', color: '#4ade80' }
+      return { text: T.flowBullish, color: '#4ade80' }
     if (bear > bull + 1)
-      return { text: 'BEARISH FLOW', color: '#f87171' }
-    return { text: 'MIXED', color: '#b0b0b0' }
+      return { text: T.flowBearish, color: '#f87171' }
+    return { text: T.flowMixed, color: '#b0b0b0' }
   }, [sentimentCounts])
 
   // Apply the active filter to produce the visible list.
