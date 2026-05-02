@@ -30,6 +30,7 @@ import { useSignals } from '@/lib/hooks/useSignals'
 import { useNews } from '@/lib/hooks/useNews'
 import { useTechnicals } from '@/lib/hooks/useTechnicals'
 import { useCalendar } from '@/lib/hooks/useCalendar'
+import { useHistory } from '@/lib/hooks/useHistory'
 import { biasColor, formatDateTime } from '@/lib/utils'
 import { getCurrentSession } from '@/lib/session'
 import type {
@@ -414,6 +415,10 @@ export default function AnalysisPanel({ onLevelsUpdate }: AnalysisPanelProps = {
   const news = useNews()
   const technicals = useTechnicals()
   const calendar = useCalendar()
+  // [SPRINT-5] Persist every successful analysis to localStorage
+  // history; the hook also runs the +2H/+4H outcome checker in
+  // the background so we don't need to manage that here.
+  const history = useHistory()
   const { data, loading, error, secondsUntilNext, trigger } = analysis
 
   const [hoverBtn, setHoverBtn] = useState(false)
@@ -450,6 +455,22 @@ export default function AnalysisPanel({ onLevelsUpdate }: AnalysisPanelProps = {
     technicals.indicators,
     onLevelsUpdate,
   ])
+
+  // [SPRINT-5] Persist each successful analysis to localStorage
+  // history. Keyed off generatedAt so we save once per unique
+  // run; useHistory dedupes downstream too (a duplicate save with
+  // the same generatedAt would create a new record id, but in
+  // practice this effect only fires when the analyze hook returns
+  // fresh data).
+  const lastSavedAt = useRef<string | null>(null)
+  useEffect(() => {
+    if (!data) return
+    if (lastSavedAt.current === data.generatedAt) return
+    lastSavedAt.current = data.generatedAt
+    const session = getCurrentSession().name
+    const price = goldPrice.data?.price ?? 0
+    history.saveAnalysis(data, price, session)
+  }, [data, goldPrice.data, history])
 
   // Build the analyze payload from current upstream state.
   const buildRequest = useCallback((): AnalysisRequest => {
