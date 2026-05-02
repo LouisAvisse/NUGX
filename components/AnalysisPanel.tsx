@@ -447,9 +447,19 @@ interface AnalysisPanelProps {
   // swingHigh/swingLow piggyback off the technicals hook so the
   // chart shows recent structure even before the first analysis.
   onLevelsUpdate?: (levels: ChartLevels) => void
+
+  // [SPRINT-8] Called after every successful analysis result
+  // arrives. page.tsx uses this to lift the AnalysisResult into
+  // a top-level state slot so the invalidation-alert hook can
+  // watch it. Optional — the panel works fine without it for any
+  // future caller that doesn't need alerts.
+  onAnalysisComplete?: (result: import('@/lib/types').AnalysisResult) => void
 }
 
-export default function AnalysisPanel({ onLevelsUpdate }: AnalysisPanelProps = {}) {
+export default function AnalysisPanel({
+  onLevelsUpdate,
+  onAnalysisComplete,
+}: AnalysisPanelProps = {}) {
   const analysis = useAnalysis()
   const goldPrice = useGoldPrice()
   const signals = useSignals()
@@ -511,7 +521,11 @@ export default function AnalysisPanel({ onLevelsUpdate }: AnalysisPanelProps = {
     const session = getCurrentSession().name
     const price = goldPrice.data?.price ?? 0
     history.saveAnalysis(data, price, session)
-  }, [data, goldPrice.data, history])
+    // [SPRINT-8] Lift the result up to page.tsx so useAlerts can
+    // watch invalidationLevel for crosses. Fires once per unique
+    // generatedAt thanks to the same dedupe ref above.
+    onAnalysisComplete?.(data)
+  }, [data, goldPrice.data, history, onAnalysisComplete])
 
   // Build the analyze payload from current upstream state.
   const buildRequest = useCallback((): AnalysisRequest => {

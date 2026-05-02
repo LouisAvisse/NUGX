@@ -37,10 +37,16 @@ import CalendarPanel from '@/components/CalendarPanel'
 import NewsFeed from '@/components/NewsFeed'
 import BottomBar from '@/components/BottomBar'
 import JournalPanel from '@/components/JournalPanel'
+import AlertBanner, {
+  CRITICAL_HEIGHT,
+  WARNING_HEIGHT,
+  MORE_ROW_HEIGHT,
+} from '@/components/AlertBanner'
+import { useAlerts } from '@/lib/hooks/useAlerts'
 import { useGoldPrice } from '@/lib/hooks/useGoldPrice'
 import { useBreakpoint } from '@/lib/hooks/useBreakpoint'
 import { formatPrice } from '@/lib/utils'
-import type { ChartLevels } from '@/lib/types'
+import type { AnalysisResult, ChartLevels } from '@/lib/types'
 
 export default function Page() {
   const goldPrice = useGoldPrice()
@@ -60,6 +66,36 @@ export default function Page() {
   // [SPRINT-6] JournalPanel slide-in overlay. Toggled by the J key
   // and (when added) the JOURNAL chip in PriceBar; ESC closes it.
   const [isJournalOpen, setIsJournalOpen] = useState(false)
+
+  // [SPRINT-8] Lifted from AnalysisPanel via the onAnalysisComplete
+  // callback. useAlerts watches this + the live price for crosses
+  // of the invalidationLevel and surfaces banners. Setting via
+  // useCallback so the AnalysisPanel effect doesn't re-fire on
+  // every render.
+  const [lastAnalysisResult, setLastAnalysisResult] =
+    useState<AnalysisResult | null>(null)
+  const handleAnalysisComplete = useCallback((result: AnalysisResult) => {
+    setLastAnalysisResult(result)
+  }, [])
+
+  const alerts = useAlerts({
+    lastAnalysis: lastAnalysisResult,
+    currentPrice: goldPrice.data?.price ?? null,
+  })
+
+  // Reserved layout space below the PriceBar to compensate for
+  // the AlertBanner stack. Without this, the fixed-position banner
+  // overlays the SignalsPanel + middle row. Stack height is the
+  // sum of the inline banners' heights plus a "+N MORE" row when
+  // there's overflow. Per-severity heights live in AlertBanner.tsx.
+  const inlineAlerts = alerts.activeAlerts.slice(0, 2)
+  const overflowCount = Math.max(0, alerts.activeAlerts.length - 2)
+  const alertStackHeight =
+    inlineAlerts.reduce(
+      (acc, a) =>
+        acc + (a.severity === 'CRITICAL' ? CRITICAL_HEIGHT : WARNING_HEIGHT),
+      0
+    ) + (overflowCount > 0 ? MORE_ROW_HEIGHT : 0)
 
   // AI levels lifted from AnalysisPanel so GoldChart can overlay
   // entry/stop/target/resistance/support as horizontal price
@@ -166,6 +202,28 @@ export default function Page() {
         />
       </div>
 
+      {/* [SPRINT-8] Layout-compensation spacer — reserves the
+          space the fixed AlertBanner stack occupies below the
+          PriceBar. Height collapses to 0 when no alerts are
+          active so the layout doesn't jitter on dismiss. */}
+      <div
+        data-section="alert-spacer"
+        style={{
+          height: `${alertStackHeight}px`,
+          minHeight: `${alertStackHeight}px`,
+          flexShrink: 0,
+          transition: 'height 0.2s ease',
+        }}
+      />
+
+      {/* The banner stack is position:fixed so it overlays clean
+          and we don't have to thread it through the flex column. */}
+      <AlertBanner
+        alerts={alerts.activeAlerts}
+        onDismiss={alerts.dismiss}
+        onDismissAll={alerts.dismissAll}
+      />
+
       {/* 2. Signals strip — always horizontal, scrolls when narrow. */}
       <SignalsPanel />
 
@@ -263,7 +321,12 @@ export default function Page() {
             order: isStacked ? 2 : 0,
           }}
         >
-          {showRight && <AnalysisPanel onLevelsUpdate={handleLevelsUpdate} />}
+          {showRight && (
+            <AnalysisPanel
+              onLevelsUpdate={handleLevelsUpdate}
+              onAnalysisComplete={handleAnalysisComplete}
+            />
+          )}
         </div>
       </div>
 

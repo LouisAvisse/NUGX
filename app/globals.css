@@ -148,3 +148,20 @@ body {
 .terminal-btn {
   transition: color 0.15s ease, border-color 0.15s ease;
 }
+
+/* [SPRINT-8] Slide-down — used by AlertBanner so a new
+ * invalidation alert eases in from the top edge instead of
+ * snapping in. */
+@keyframes slideDown {
+  from {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+.alert-banner {
+  animation: slideDown 0.2s ease-out;
+}
