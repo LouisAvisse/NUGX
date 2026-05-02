@@ -350,6 +350,171 @@ function ParamCell({
   )
 }
 
+// [PHASE-3] Alt-scenario disclosure row.
+//
+// Renders a small expandable row beneath the primary trade
+// parameters. Collapsed shows just "SCÉNARIO ALT" + the
+// recommendation chip; expanded shows the trigger sentence and a
+// compact entry/stop/target line.
+//
+// Visual posture: deliberately less prominent than the primary
+// params row (smaller font, muted background) so the primary
+// trade reads first. Same blue/red/green semantic palette so the
+// trader's eye reads "this is the other side" without confusion.
+function AltScenarioRow({
+  scenario,
+}: {
+  scenario: import('@/lib/types').AltScenario
+}) {
+  const [expanded, setExpanded] = useState(false)
+  const recColor =
+    scenario.recommendation === 'LONG'
+      ? '#4ade80'
+      : scenario.recommendation === 'SHORT'
+        ? '#f87171'
+        : '#b0b0b0'
+  const recGlyph =
+    scenario.recommendation === 'LONG'
+      ? '▲'
+      : scenario.recommendation === 'SHORT'
+        ? '▼'
+        : '◆'
+  return (
+    <div
+      data-section="alt-scenario"
+      style={{
+        marginTop: '8px',
+        background: '#161616',
+        border: '1px solid #222222',
+        borderRadius: '2px',
+      }}
+    >
+      <button
+        type="button"
+        onClick={() => setExpanded((e) => !e)}
+        aria-expanded={expanded}
+        style={{
+          width: '100%',
+          background: 'transparent',
+          border: 'none',
+          padding: '6px 10px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          cursor: 'pointer',
+          color: '#b0b0b0',
+          fontFamily: 'var(--font-mono)',
+          fontSize: '9px',
+          letterSpacing: '0.1em',
+        }}
+      >
+        <span style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <span style={{ color: '#666666', fontSize: '8px' }}>
+            {expanded ? '▾' : '▸'}
+          </span>
+          <span style={{ color: '#888888' }}>SCÉNARIO ALT</span>
+          <span
+            style={{
+              color: recColor,
+              fontSize: '9px',
+              fontWeight: 500,
+            }}
+          >
+            {recGlyph} {scenario.recommendation}
+          </span>
+        </span>
+        <span style={{ color: '#666666', fontSize: '8px' }}>
+          {expanded ? 'MASQUER' : 'AFFICHER'}
+        </span>
+      </button>
+      {expanded ? (
+        <div
+          style={{
+            padding: '0 10px 10px 10px',
+            borderTop: '1px solid #1a1a1a',
+            paddingTop: '8px',
+          }}
+        >
+          {/* Trigger sentence — describes what price action
+              activates this branch. */}
+          <div
+            style={{
+              color: '#e5e5e5',
+              fontSize: '10px',
+              lineHeight: 1.5,
+              marginBottom: '8px',
+            }}
+          >
+            <span style={{ color: '#888888', marginRight: '4px' }}>
+              DÉCLENCHEUR :
+            </span>
+            {scenario.trigger}
+          </div>
+          {/* Compact entry/stop/target row — same color
+              semantics as the primary trade params. */}
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '1fr 1fr 1fr',
+              gap: '6px',
+              marginBottom: '6px',
+            }}
+          >
+            <div>
+              <div style={{ ...labelStyle, fontSize: '7px' }}>ENTRÉE</div>
+              <div
+                style={{
+                  color: '#60a5fa',
+                  fontSize: '10px',
+                  fontWeight: 500,
+                  marginTop: '1px',
+                }}
+              >
+                {scenario.entry}
+              </div>
+            </div>
+            <div>
+              <div style={{ ...labelStyle, fontSize: '7px' }}>STOP</div>
+              <div
+                style={{
+                  color: '#f87171',
+                  fontSize: '10px',
+                  fontWeight: 500,
+                  marginTop: '1px',
+                }}
+              >
+                {scenario.stop}
+              </div>
+            </div>
+            <div>
+              <div style={{ ...labelStyle, fontSize: '7px' }}>OBJECTIF</div>
+              <div
+                style={{
+                  color: '#4ade80',
+                  fontSize: '10px',
+                  fontWeight: 500,
+                  marginTop: '1px',
+                }}
+              >
+                {scenario.target}
+              </div>
+            </div>
+          </div>
+          <div
+            style={{
+              color: '#888888',
+              fontSize: '9px',
+              lineHeight: 1.5,
+            }}
+          >
+            {scenario.rationale}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
 // One row in the 8-signal grid. The label is wrapped in a
 // Tooltip so the trader can hover any of the 8 signals to read
 // what it measures and how to interpret the dot color.
@@ -1231,6 +1396,16 @@ export default function AnalysisPanel({
             </span>
           )}
         </div>
+
+        {/* [PHASE-3] Alt-scenario disclosure — only renders when
+            altScenario is non-null. Collapsed by default; clicking
+            the header expands a row with the trigger + mirror
+            entry/stop/target. Same palette as the main params row
+            (blue/red/green) but inset and at smaller weight so the
+            primary trade reads first. */}
+        {!showSkeleton && !showError && data?.altScenario ? (
+          <AltScenarioRow scenario={data.altScenario} />
+        ) : null}
       </div>
 
       {/* 5. Confluence score block. */}

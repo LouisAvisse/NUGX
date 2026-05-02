@@ -369,6 +369,35 @@ export interface AnalysisResult {
   // above the confidence threshold; the analysis remains valid in
   // that case and the UI just hides the setup chip. See lib/setups.ts.
   detectedSetup?: SetupName | null
+
+  // [PHASE-3] Alternative scenario.
+  //
+  // Most setups in real trading are binary — "if price breaks X,
+  // continuation; if rejects, fade". The primary recommendation
+  // covers the higher-probability path; altScenario carries the
+  // mirror trade. Surfacing both lets the trader pick a side
+  // based on which trigger fires first instead of guessing the
+  // direction up front.
+  //
+  // null when the setup isn't binary (e.g. clear directional
+  // momentum, no clear pivot to react to). The UI hides the alt
+  // row in that case.
+  altScenario?: AltScenario | null
+}
+
+// [PHASE-3] Mirror trade for a binary setup. Same level shape as
+// the primary AnalysisResult so the UI can render it with the
+// same components. trigger is a one-sentence description of what
+// price action would activate this branch ("Si le prix casse
+// 3290 par le haut" / "Si rejet du test 3290").
+export interface AltScenario {
+  trigger: string
+  recommendation: Recommendation
+  bias: Bias
+  entry: string
+  stop: string
+  target: string
+  rationale: string
 }
 
 // [PHASE-2] Trimmed view of the WeightedConfluence object from

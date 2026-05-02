@@ -248,6 +248,26 @@ ENTRY / STOP / TARGET RULES:
 - Target: next structural level (swing high/low, round number, BB band).
 - Risk/reward must be at least 1:2. If you cannot achieve it, recommend FLAT.
 
+SCENARIO BRANCHING:
+When the setup is genuinely binary — a clear pivot price where
+EITHER outcome is plausible (e.g. range-edge breakout vs. fake-out,
+double-top confirmation vs. trend continuation, FOMC release with
+two-way risk) — populate the optional altScenario field with the
+MIRROR trade. The primary recommendation should always cover the
+higher-probability path; altScenario is the lower-probability
+fade.
+
+Set altScenario to null when:
+  - The setup is unidirectional (clear trend continuation, no
+    obvious counter-pivot)
+  - You'd be guessing rather than describing a real binary
+  - clearToTrade is false (FLAT primary; no trade idea to mirror)
+
+When populated, altScenario.trigger MUST be a one-sentence French
+description of the price-action trigger that activates this
+branch — e.g. "Si le prix casse 3290 USD par le haut avec
+clôture 5M confirmée." Include exact prices, not vague language.
+
 CATALYST FORMAT — exactly three labeled lines:
 NOW: <one sentence describing what is moving gold right now>
 RISK: <the single biggest threat to this trade>
@@ -295,7 +315,16 @@ JSON shape (every field required):
   "entryType": "IDEAL" | "AGGRESSIVE" | "WAIT",
   "invalidationLevel": "exact price",
   "marketCondition": "TRENDING_UP" | "TRENDING_DOWN" | "RANGING" | "BREAKOUT_WATCH",
-  "generatedAt": "ISO timestamp (we will overwrite this server-side)"
+  "generatedAt": "ISO timestamp (we will overwrite this server-side)",
+  "altScenario": null OR {
+    "trigger": "one-sentence French price-action trigger with exact prices",
+    "recommendation": "LONG" | "SHORT" | "FLAT",
+    "bias": "BULLISH" | "BEARISH" | "NEUTRAL",
+    "entry": "exact price or tight range",
+    "stop": "exact price",
+    "target": "exact price",
+    "rationale": "one-sentence French rationale for this branch"
+  }
 }`
 
 // [SPRINT-4] Render the MULTI-TIMEFRAME ANALYSIS section of the
@@ -811,6 +840,22 @@ Count the totals. Apply the entry rules. Deliver the JSON exactly per the schema
     parsed.weightedConfluence = computeWeightedConfluence(parsed.signals)
     const match = detectSetup(body)
     parsed.detectedSetup = match ? match.name : null
+
+    // [PHASE-3] Validate altScenario shape — Claude occasionally
+    // emits half-populated objects under prompt drift. Drop the
+    // field rather than render a broken alt row.
+    if (parsed.altScenario && typeof parsed.altScenario === 'object') {
+      const a = parsed.altScenario
+      const valid =
+        typeof a.trigger === 'string' &&
+        typeof a.recommendation === 'string' &&
+        typeof a.bias === 'string' &&
+        typeof a.entry === 'string' &&
+        typeof a.stop === 'string' &&
+        typeof a.target === 'string' &&
+        typeof a.rationale === 'string'
+      if (!valid) parsed.altScenario = null
+    }
 
     return NextResponse.json(parsed)
   } catch (err) {
