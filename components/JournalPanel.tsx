@@ -30,6 +30,7 @@ import {
 import { useGoldPrice } from '@/lib/hooks/useGoldPrice'
 import { computeTiltState, type TiltState } from '@/lib/tiltDetector'
 import { useHistory } from '@/lib/hooks/useHistory'
+import { getHistory } from '@/lib/history'
 import { calculatePnL, formatPnL } from '@/lib/journal'
 import { formatPrice, formatDateTime } from '@/lib/utils'
 import { getCurrentSession } from '@/lib/session'
@@ -82,6 +83,283 @@ const inputStyle: React.CSSProperties = {
   fontSize: '10px',
   padding: '4px 6px',
   width: '100%',
+}
+
+// [PHASE-9] What-if explorer — filterable summary over history.
+//
+// The trader picks a direction (ALL/LONG/SHORT) and a session
+// (ALL/Tokyo/London/NY-London/NY/Off-hours). The component
+// re-derives wins/losses/accuracy/avg-favorable% from the
+// filtered slice in real time. The point is to let the trader
+// discover their own rules ("don't take SHORTs in Tokyo")
+// instead of being told what to do.
+//
+// Reads getHistory() once on mount; recomputes on filter change.
+// Excludes legacyOutcome records — only post-Phase-1 path-replay
+// outcomes count, same posture as PersonalPatterns + calibration.
+function WhatIfExplorer() {
+  type Dir = 'ALL' | 'LONG' | 'SHORT'
+  type Sess = 'ALL' | 'Tokyo' | 'London' | 'NY/London Overlap' | 'New York' | 'Off-hours'
+
+  const [direction, setDirection] = useState<Dir>('ALL')
+  const [session, setSession] = useState<Sess>('ALL')
+  const [version, setVersion] = useState(0)
+
+  // Trigger recompute on history mutations — the historyUpdated
+  // event fires from useHistory whenever a record is saved or
+  // an outcome resolves.
+  useEffect(() => {
+    function bump() {
+      setVersion((v) => v + 1)
+    }
+    window.addEventListener('historyUpdated', bump)
+    return () => window.removeEventListener('historyUpdated', bump)
+  }, [])
+
+  // [PHASE-9] Recompute stats from the filtered history slice.
+  // useMemo isn't strictly necessary at this scale (20-200
+  // records max) but keeps the body declarative.
+  const stats = (() => {
+    void version   // touch for re-eval after a mutation event
+    const all = getHistory().filter(
+      (r) => !r.legacyOutcome && r.recommendation !== 'FLAT'
+    )
+    const filtered = all.filter((r) => {
+      if (direction !== 'ALL' && r.recommendation !== direction) return false
+      if (session !== 'ALL' && r.session !== session) return false
+      return true
+    })
+    const decided = filtered.filter(
+      (r) => r.hitOutcome === 'HIT_TARGET' || r.hitOutcome === 'HIT_STOP'
+    )
+    const wins = decided.filter((r) => r.hitOutcome === 'HIT_TARGET').length
+    const losses = decided.filter((r) => r.hitOutcome === 'HIT_STOP').length
+    const accuracy =
+      decided.length >= 3 ? Math.round((wins / decided.length) * 100) : null
+
+    // Average favorable% across the filtered slice (decided +
+    // open) — same definition as the rehearsal row.
+    const favs: number[] = []
+    for (const r of filtered) {
+      if (r.pathMaxFavorable === undefined) continue
+      const entryNum = parseFloat(r.entry)
+      const targetNum = parseFloat(r.target)
+      if (!Number.isFinite(entryNum) || !Number.isFinite(targetNum)) continue
+      const span = targetNum - entryNum
+      if (span === 0) continue
+      const f =
+        r.recommendation === 'LONG'
+          ? ((r.pathMaxFavorable - entryNum) / span) * 100
+          : ((entryNum - r.pathMaxFavorable) / -span) * 100
+      if (Number.isFinite(f)) favs.push(f)
+    }
+    const avgFav =
+      favs.length >= 3
+        ? Math.round(favs.reduce((a, b) => a + b, 0) / favs.length)
+        : null
+
+    return {
+      total: filtered.length,
+      decided: decided.length,
+      wins,
+      losses,
+      accuracy,
+      avgFav,
+    }
+  })()
+
+  const accColor =
+    stats.accuracy === null
+      ? '#666666'
+      : stats.accuracy >= 60
+        ? '#4ade80'
+        : stats.accuracy >= 45
+          ? '#fbbf24'
+          : '#f87171'
+
+  // Reusable filter-chip button. Active state uses the chip
+  // vocabulary established in Phase 2 + Phase 4 (1px border,
+  // 4px max radius, Geist Mono).
+  function FilterChip({
+    label,
+    active,
+    onClick,
+  }: {
+    label: string
+    active: boolean
+    onClick: () => void
+  }) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        style={{
+          background: active ? '#161616' : 'transparent',
+          border: active ? '1px solid #2a2a2a' : '1px solid transparent',
+          color: active ? '#e5e5e5' : '#666666',
+          fontSize: '9px',
+          padding: '2px 7px',
+          letterSpacing: '0.08em',
+          fontFamily: 'var(--font-mono)',
+          cursor: 'pointer',
+          borderRadius: '2px',
+          transition: 'color 0.15s ease, background 0.15s ease',
+        }}
+      >
+        {label}
+      </button>
+    )
+  }
+
+  return (
+    <div
+      data-section="whatif-explorer"
+      style={{
+        padding: '12px 16px',
+        borderBottom: '1px solid #222222',
+        background: '#0c0c0c',
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          marginBottom: '6px',
+        }}
+      >
+        <span
+          style={{
+            color: '#888888',
+            fontSize: '9px',
+            letterSpacing: '0.12em',
+            textTransform: 'uppercase',
+          }}
+        >
+          EXPLORATEUR
+        </span>
+        <span
+          style={{
+            color: stats.accuracy !== null ? accColor : '#666666',
+            fontSize: '14px',
+            fontWeight: 500,
+            fontFeatureSettings: '"tnum"',
+          }}
+        >
+          {stats.accuracy !== null ? `${stats.accuracy}%` : '——'}
+        </span>
+      </div>
+
+      {/* Direction filter row */}
+      <div
+        style={{
+          display: 'flex',
+          gap: '4px',
+          marginBottom: '4px',
+          flexWrap: 'wrap',
+        }}
+      >
+        {(['ALL', 'LONG', 'SHORT'] as const).map((d) => (
+          <FilterChip
+            key={d}
+            label={d === 'ALL' ? 'TOUS' : d}
+            active={direction === d}
+            onClick={() => setDirection(d)}
+          />
+        ))}
+      </div>
+
+      {/* Session filter row */}
+      <div
+        style={{
+          display: 'flex',
+          gap: '4px',
+          marginBottom: '8px',
+          flexWrap: 'wrap',
+        }}
+      >
+        {(
+          [
+            'ALL',
+            'Tokyo',
+            'London',
+            'NY/London Overlap',
+            'New York',
+            'Off-hours',
+          ] as const
+        ).map((s) => (
+          <FilterChip
+            key={s}
+            label={
+              s === 'ALL'
+                ? 'TTES'
+                : s === 'NY/London Overlap'
+                  ? 'NY/LDN'
+                  : s === 'Off-hours'
+                    ? 'HORS'
+                    : s.toUpperCase()
+            }
+            active={session === s}
+            onClick={() => setSession(s)}
+          />
+        ))}
+      </div>
+
+      {/* Stats summary */}
+      <div
+        style={{
+          display: 'flex',
+          gap: '12px',
+          fontSize: '9px',
+          color: '#b0b0b0',
+          fontFeatureSettings: '"tnum"',
+        }}
+      >
+        <span>
+          <span style={{ color: '#666666' }}>RÉSULTATS </span>
+          <span style={{ color: '#4ade80' }}>{stats.wins}V</span>
+          <span style={{ color: '#444444' }}> / </span>
+          <span style={{ color: '#f87171' }}>{stats.losses}P</span>
+          <span style={{ color: '#666666' }}> ({stats.decided})</span>
+        </span>
+        <span>
+          <span style={{ color: '#666666' }}>TOTAL </span>
+          <span>{stats.total}</span>
+        </span>
+        {stats.avgFav !== null ? (
+          <span>
+            <span style={{ color: '#666666' }}>CHEMIN </span>
+            <span>{stats.avgFav}%</span>
+          </span>
+        ) : null}
+      </div>
+
+      {stats.decided < 3 && stats.total > 0 ? (
+        <div
+          style={{
+            marginTop: '6px',
+            color: '#555555',
+            fontSize: '9px',
+            lineHeight: 1.5,
+          }}
+        >
+          Pas encore assez de résultats résolus pour ce filtre — précision masquée.
+        </div>
+      ) : null}
+      {stats.total === 0 ? (
+        <div
+          style={{
+            marginTop: '6px',
+            color: '#444444',
+            fontSize: '9px',
+            lineHeight: 1.5,
+          }}
+        >
+          Aucun trade ne correspond à ce filtre.
+        </div>
+      ) : null}
+    </div>
+  )
 }
 
 // [PHASE-7] Anti-tilt strip — top of the JOURNAL tab.
@@ -656,6 +934,14 @@ function MemoryTab({ patterns }: { patterns: PersonalPatterns | null }) {
           </div>
         </div>
       )}
+
+      {/* [PHASE-9] What-if explorer — filter the trader's history
+          by direction + session and see how stats shift. Helps
+          the trader build personal rules ("I'm 72% on London
+          LONGs, 38% on Tokyo SHORTs — bias session selection
+          accordingly") instead of guessing. Pure derivation
+          over the existing history; no new data fetched. */}
+      <WhatIfExplorer />
 
       {/* BY SESSION */}
       <div style={{ padding: '10px 16px 6px 16px' }}>
