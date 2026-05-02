@@ -21,13 +21,28 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import Tooltip from '@/components/Tooltip'
 import { useNews } from '@/lib/hooks/useNews'
 import { formatTime } from '@/lib/utils'
 import { T } from '@/lib/copy'
 import type { ImpactLevel, NewsArticle, NewsSentiment } from '@/lib/types'
 
-// Filter modes.
-type Filter = 'ALL' | 'HIGH' | 'BULL'
+// Filter modes — single-select, mutually exclusive. Each maps to
+// a distinct trader workflow rather than a generic
+// impact-vs-sentiment axis split:
+//
+//   ALL     no filter — full feed
+//   URGENT  HIGH-impact only — "what's moving the market RIGHT NOW"
+//   BULL    bullish-sentiment only — "validate my LONG thesis"
+//   BEAR    bearish-sentiment only — "validate my SHORT thesis"
+//
+// Replaces the previous three chips (TOUS / HAUT / HAUSSE) which
+// stacked impact and sentiment filters as flat siblings — the
+// HAUT/HAUSSE label collision was confusing and the row was
+// asymmetric (no BAISSE counterpart). The new four chips give
+// the trader a symmetric directional pair plus a single
+// "urgent now" focus mode.
+type Filter = 'ALL' | 'URGENT' | 'BULL' | 'BEAR'
 
 // ─────────────────────────────────────────────────────────────────
 // Helpers
@@ -138,39 +153,135 @@ function CenteredMessage({
   )
 }
 
-// One filter chip — active state gets a bottom border + bright fg,
-// inactive state is muted with no bottom border.
+// One filter chip. Per-chip palette so each filter has a distinct
+// visual identity (lightning amber for URGENT, up-arrow green for
+// BULL, down-arrow red for BEAR, neutral white for ALL) — no two
+// share style, eliminating the previous HAUT/HAUSSE label
+// collision. The live count next to each label is a load-bearing
+// signal: a trader scanning the row sees "0 BAISSIERS" and knows
+// the bearish thesis has no support without having to flip the
+// filter.
+//
+// Faded count when 0 — chip is still clickable but signals empty
+// at a glance.
+interface FilterChipPalette {
+  active: { fg: string; bg: string; border: string }
+  inactive: { fg: string }
+}
 function FilterChip({
   label,
-  value,
-  current,
-  onSelect,
+  glyph,
+  count,
+  palette,
+  active,
+  tooltip,
+  onClick,
 }: {
   label: string
-  value: Filter
-  current: Filter
-  onSelect: (v: Filter) => void
+  glyph?: string
+  count: number
+  palette: FilterChipPalette
+  active: boolean
+  tooltip: string
+  onClick: () => void
 }) {
-  const active = current === value
   return (
-    <button
-      onClick={() => onSelect(value)}
-      style={{
-        background: 'transparent',
-        border: 'none',
-        borderBottom: active ? '1px solid #e5e5e5' : '1px solid transparent',
-        color: active ? '#e5e5e5' : '#666666',
-        fontSize: '8px',
-        padding: '0 4px',
-        letterSpacing: '0.08em',
-        fontFamily: 'var(--font-mono)',
-        cursor: 'pointer',
-      }}
-    >
-      {label}
-    </button>
+    <Tooltip position="bottom" content={tooltip}>
+      <button
+        type="button"
+        onClick={onClick}
+        aria-pressed={active}
+        style={{
+          background: active ? palette.active.bg : 'transparent',
+          border: active
+            ? `1px solid ${palette.active.border}`
+            : '1px solid transparent',
+          color: active ? palette.active.fg : palette.inactive.fg,
+          fontSize: '9px',
+          padding: '2px 6px',
+          letterSpacing: '0.08em',
+          fontFamily: 'var(--font-sans)',
+          cursor: 'pointer',
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '4px',
+          borderRadius: '2px',
+          // Slight transition on hover/active so the row feels
+          // responsive without being noisy.
+          transition: 'color 0.15s ease, background 0.15s ease',
+        }}
+      >
+        {glyph && <span>{glyph}</span>}
+        <span>{label}</span>
+        <span
+          style={{
+            color: active
+              ? palette.active.fg
+              : count === 0
+                ? '#333333'
+                : '#666666',
+            fontFeatureSettings: '"tnum"',
+          }}
+        >
+          · {count}
+        </span>
+      </button>
+    </Tooltip>
   )
 }
+
+// Per-filter palette + tooltip copy. Keeping the metadata as a
+// const so the four chips render in a consistent loop.
+const FILTER_META: Record<Filter, {
+  label: string
+  glyph?: string
+  palette: FilterChipPalette
+  tooltip: string
+}> = {
+  ALL: {
+    label: 'TOUS',
+    palette: {
+      active: { fg: '#e5e5e5', bg: '#1a1a1a', border: '#2a2a2a' },
+      inactive: { fg: '#888888' },
+    },
+    tooltip:
+      "Affiche tous les articles du flux — aucun filtre. Idéal pour scanner le contexte général de session.",
+  },
+  URGENT: {
+    label: 'URGENT',
+    glyph: '⚡',
+    palette: {
+      active: { fg: '#fbbf24', bg: '#1a1500', border: '#3a2e00' },
+      inactive: { fg: '#888888' },
+    },
+    tooltip:
+      "Affiche uniquement les articles à FORT impact (Fed, CPI, NFP, FOMC, rendements, crise). Ce qui peut faire bouger l'or maintenant — à lire en priorité.",
+  },
+  BULL: {
+    label: 'HAUSSIERS',
+    glyph: '▲',
+    palette: {
+      active: { fg: '#4ade80', bg: '#0a1a0a', border: '#1a3a1a' },
+      inactive: { fg: '#888888' },
+    },
+    tooltip:
+      "Affiche uniquement les articles haussiers pour l'or (DXY faible, baisse de taux, demande safe-haven, géopolitique). Pour valider une thèse LONG.",
+  },
+  BEAR: {
+    label: 'BAISSIERS',
+    glyph: '▼',
+    palette: {
+      active: { fg: '#f87171', bg: '#1a0a0a', border: '#3a1a1a' },
+      inactive: { fg: '#888888' },
+    },
+    tooltip:
+      "Affiche uniquement les articles baissiers pour l'or (DXY fort, hausse de taux, rendements en hausse, risk-on). Pour valider une thèse SHORT.",
+  },
+}
+
+// Filter chip ordering — TOUS first (default), then URGENT
+// (highest workflow priority), then directional pair.
+const FILTER_ORDER: Filter[] = ['ALL', 'URGENT', 'BULL', 'BEAR']
 
 // ─────────────────────────────────────────────────────────────────
 // Main component
@@ -220,19 +331,36 @@ export default function NewsFeed() {
 
   // Apply the active filter to produce the visible list.
   const visibleArticles: NewsArticle[] = useMemo(() => {
-    if (filter === 'HIGH') return articles.filter((a) => a.impact === 'HIGH')
+    if (filter === 'URGENT') return articles.filter((a) => a.impact === 'HIGH')
     if (filter === 'BULL')
       return articles.filter((a) => a.sentiment === 'BULLISH')
+    if (filter === 'BEAR')
+      return articles.filter((a) => a.sentiment === 'BEARISH')
     return articles
   }, [articles, filter])
 
-  // Footer count + label per filter mode.
+  // Per-filter counts — pre-computed so each chip can render
+  // its live count without a re-filter at render time. Drives
+  // the "0 BAISSIERS" signal-density read.
+  const filterCounts = useMemo<Record<Filter, number>>(
+    () => ({
+      ALL: articles.length,
+      URGENT: articles.filter((a) => a.impact === 'HIGH').length,
+      BULL: articles.filter((a) => a.sentiment === 'BULLISH').length,
+      BEAR: articles.filter((a) => a.sentiment === 'BEARISH').length,
+    }),
+    [articles]
+  )
+
+  // Footer count + label per filter mode. French throughout.
   const footerLabel =
-    filter === 'HIGH'
-      ? `${visibleArticles.length} HIGH IMPACT`
+    filter === 'URGENT'
+      ? `${visibleArticles.length} URGENT${visibleArticles.length > 1 ? 'S' : ''}`
       : filter === 'BULL'
-        ? `${visibleArticles.length} BULLISH`
-        : `${articles.length} ARTICLES`
+        ? `${visibleArticles.length} HAUSSIER${visibleArticles.length > 1 ? 'S' : ''}`
+        : filter === 'BEAR'
+          ? `${visibleArticles.length} BAISSIER${visibleArticles.length > 1 ? 'S' : ''}`
+          : `${articles.length} ARTICLE${articles.length > 1 ? 'S' : ''}`
 
   // Pick the list body branch based on hook state + filter.
   let body: React.ReactNode
@@ -262,11 +390,12 @@ export default function NewsFeed() {
       />
     )
   } else if (visibleArticles.length === 0) {
-    // Filter excluded everything but we have articles.
+    // Filter excluded everything but we have articles. Fully
+    // French copy + suggests the recovery action.
     body = (
       <CenteredMessage
         primary="AUCUN RÉSULTAT"
-        secondary={`Filter "${filter}" excludes every article in the current feed`}
+        secondary={`Le filtre « ${FILTER_META[filter].label} » exclut tous les articles. Repasser sur « TOUS » pour voir le flux complet.`}
       />
     )
   } else {
@@ -371,7 +500,10 @@ export default function NewsFeed() {
         border: '1px solid #222222',
       }}
     >
-      {/* 1. Header — NEWS label, filter chips, last-updated time. */}
+      {/* 1. Header — ACTUS label + last-updated time. The filter
+            row moved to its own dedicated band below so the four
+            chips have horizontal room for their counts + glyphs
+            without cramping the header. */}
       <div
         style={{
           display: 'flex',
@@ -382,50 +514,72 @@ export default function NewsFeed() {
           gap: '8px',
         }}
       >
-        <span
-          style={{
-            color: '#888888',
-            fontSize: '9px',
-            textTransform: 'uppercase',
-            letterSpacing: '0.12em',
-          }}
-        >ACTUS</span>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-          <FilterChip
-            label="TOUS"
-            value="ALL"
-            current={filter}
-            onSelect={setFilter}
-          />
-          <FilterChip
-            label="HAUT"
-            value="HIGH"
-            current={filter}
-            onSelect={setFilter}
-          />
-          <FilterChip
-            label="HAUSSE"
-            value="BULL"
-            current={filter}
-            onSelect={setFilter}
-          />
-        </div>
+        <Tooltip
+          position="bottom"
+          content="Flux d'actualités gold + macro agrégé via Google News (Reuters, Bloomberg, FT, KITCO, Investing.com, etc.). Tagué automatiquement par impact (Fed/CPI/NFP = HAUT) et par sentiment pour l'or (DXY/taux/géopolitique). Rafraîchi toutes les 15 minutes."
+        >
+          <span
+            style={{
+              color: '#888888',
+              fontSize: '9px',
+              textTransform: 'uppercase',
+              letterSpacing: '0.12em',
+            }}
+          >
+            ACTUS
+          </span>
+        </Tooltip>
         <span
           style={{
             color: '#666666',
             fontSize: '9px',
             flexShrink: 0,
-            marginLeft: 'auto',
           }}
         >
           {lastUpdated ? formatTime(lastUpdated.toISOString()) : '——'}
         </span>
       </div>
 
+      {/* Filter chip row — its own band so the four chips with
+          glyphs + counts can breathe. Single-select, mutually
+          exclusive. Each chip exposes a tooltip via FILTER_META
+          explaining when to use it (URGENT for catalysts,
+          HAUSSIERS for LONG validation, etc.). */}
+      <div
+        data-section="actus-filters"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '4px',
+          padding: '4px 12px 6px 12px',
+          borderBottom: '1px solid #222222',
+          flexWrap: 'wrap',
+        }}
+      >
+        {FILTER_ORDER.map((key) => {
+          const meta = FILTER_META[key]
+          return (
+            <FilterChip
+              key={key}
+              label={meta.label}
+              glyph={meta.glyph}
+              count={filterCounts[key]}
+              palette={meta.palette}
+              active={filter === key}
+              tooltip={meta.tooltip}
+              onClick={() => setFilter(key)}
+            />
+          )
+        })}
+      </div>
+
       {/* 2. Sentiment summary — counts on the left, flow verdict
             on the right. Both reflect the FULL articles list,
             not the filtered subset, so the trader sees the real
-            distribution at a glance. */}
+            distribution at a glance. Tooltips on each cell so a
+            new user immediately understands what HAUSSE/BAISSE/
+            NEUTRE measure here vs the same words used elsewhere
+            in the dashboard (bias, alignment chips). */}
       <div
         style={{
           padding: '6px 12px',
@@ -436,46 +590,57 @@ export default function NewsFeed() {
         }}
       >
         <div style={{ display: 'flex', gap: '12px' }}>
-          {/* Bullish count */}
-          <div
-            style={{ display: 'flex', gap: '4px', alignItems: 'center' }}
+          <Tooltip
+            position="bottom"
+            content="Nombre d'articles taggés haussiers pour l'or — DXY faible, baisse de taux, demande safe-haven, géopolitique."
           >
-            <span style={{ color: '#4ade80', fontSize: '8px' }}>●</span>
-            <span style={{ color: '#4ade80', fontSize: '9px' }}>
-              {sentimentCounts.bull}
+            <span style={{ display: 'inline-flex', gap: '4px', alignItems: 'center' }}>
+              <span style={{ color: '#4ade80', fontSize: '8px' }}>●</span>
+              <span style={{ color: '#4ade80', fontSize: '9px' }}>
+                {sentimentCounts.bull}
+              </span>
+              <span style={{ color: '#666666', fontSize: '8px' }}>HAUSSE</span>
             </span>
-            <span style={{ color: '#666666', fontSize: '8px' }}>HAUSSE</span>
-          </div>
-          {/* Bearish count */}
-          <div
-            style={{ display: 'flex', gap: '4px', alignItems: 'center' }}
+          </Tooltip>
+          <Tooltip
+            position="bottom"
+            content="Nombre d'articles taggés baissiers pour l'or — DXY fort, hausse de taux, rendements en hausse, risk-on."
           >
-            <span style={{ color: '#f87171', fontSize: '8px' }}>●</span>
-            <span style={{ color: '#f87171', fontSize: '9px' }}>
-              {sentimentCounts.bear}
+            <span style={{ display: 'inline-flex', gap: '4px', alignItems: 'center' }}>
+              <span style={{ color: '#f87171', fontSize: '8px' }}>●</span>
+              <span style={{ color: '#f87171', fontSize: '9px' }}>
+                {sentimentCounts.bear}
+              </span>
+              <span style={{ color: '#666666', fontSize: '8px' }}>BAISSE</span>
             </span>
-            <span style={{ color: '#666666', fontSize: '8px' }}>BAISSE</span>
-          </div>
-          {/* Neutral count */}
-          <div
-            style={{ display: 'flex', gap: '4px', alignItems: 'center' }}
+          </Tooltip>
+          <Tooltip
+            position="bottom"
+            content="Articles sans direction nette pour l'or — production minière, actualités sectorielles, analyses sans biais directionnel."
           >
-            <span style={{ color: '#888888', fontSize: '8px' }}>●</span>
-            <span style={{ color: '#b0b0b0', fontSize: '9px' }}>
-              {sentimentCounts.neut}
+            <span style={{ display: 'inline-flex', gap: '4px', alignItems: 'center' }}>
+              <span style={{ color: '#888888', fontSize: '8px' }}>●</span>
+              <span style={{ color: '#b0b0b0', fontSize: '9px' }}>
+                {sentimentCounts.neut}
+              </span>
+              <span style={{ color: '#666666', fontSize: '8px' }}>NEUTRE</span>
             </span>
-            <span style={{ color: '#666666', fontSize: '8px' }}>NEUTRE</span>
-          </div>
+          </Tooltip>
         </div>
-        <span
-          style={{
-            color: verdict.color,
-            fontSize: '9px',
-            letterSpacing: '0.08em',
-          }}
+        <Tooltip
+          position="left"
+          content="Verdict net du flux d'actualités. FLUX HAUSSIER quand au moins 2 articles haussiers de plus que de baissiers. FLUX BAISSIER pour l'inverse. MITIGÉ quand l'écart est ≤ 1 — direction non claire."
         >
-          {verdict.text}
-        </span>
+          <span
+            style={{
+              color: verdict.color,
+              fontSize: '9px',
+              letterSpacing: '0.08em',
+            }}
+          >
+            {verdict.text}
+          </span>
+        </Tooltip>
       </div>
 
       {/* 3. Ratio bar — proportional 3-segment colored bar. Falls
@@ -536,7 +701,9 @@ export default function NewsFeed() {
         {body}
       </div>
 
-      {/* 5. Footer. Count reflects the active filter. */}
+      {/* 5. Footer. Count reflects the active filter so the
+            trader sees how many articles are visible right now
+            without scrolling to the end of the list. */}
       <div
         style={{
           borderTop: '1px solid #222222',
@@ -545,8 +712,18 @@ export default function NewsFeed() {
           justifyContent: 'space-between',
         }}
       >
-        <span style={{ color: '#666666', fontSize: '9px' }}>{footerLabel}</span>
-        <span style={{ color: '#666666', fontSize: '9px' }}>MAJ 15min</span>
+        <Tooltip
+          position="top"
+          content="Nombre d'articles dans la vue filtrée courante. Repasser sur « TOUS » pour le total complet du flux."
+        >
+          <span style={{ color: '#666666', fontSize: '9px' }}>{footerLabel}</span>
+        </Tooltip>
+        <Tooltip
+          position="top"
+          content="Le flux est rafraîchi automatiquement toutes les 15 minutes depuis Google News RSS."
+        >
+          <span style={{ color: '#666666', fontSize: '9px' }}>MAJ 15min</span>
+        </Tooltip>
       </div>
     </div>
   )
