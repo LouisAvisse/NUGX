@@ -21,13 +21,14 @@
 
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useJournal } from '@/lib/hooks/useJournal'
 import {
   displayMgmtState,
   useTradeManager,
 } from '@/lib/hooks/useTradeManager'
 import { useGoldPrice } from '@/lib/hooks/useGoldPrice'
+import { computeTiltState, type TiltState } from '@/lib/tiltDetector'
 import { useHistory } from '@/lib/hooks/useHistory'
 import { calculatePnL, formatPnL } from '@/lib/journal'
 import { formatPrice, formatDateTime } from '@/lib/utils'
@@ -81,6 +82,119 @@ const inputStyle: React.CSSProperties = {
   fontSize: '10px',
   padding: '4px 6px',
   width: '100%',
+}
+
+// [PHASE-7] Anti-tilt strip — top of the JOURNAL tab.
+//
+// Reads the live tilt state from lib/tiltDetector and renders
+// one of three layouts:
+//   - shouldStepAway = true   → red banner ("STOP — pause requise")
+//   - hasTilt = true          → amber banner with reason copy
+//   - else                    → muted compact row showing rolling
+//                                 WR + loss-streak indicator
+//
+// The strip refreshes whenever the journal mutates (a new entry
+// added or an existing one closed) — both code paths trigger a
+// re-render of the parent component, which re-runs this hook.
+function TiltStrip({ refreshKey }: { refreshKey: number }) {
+  const [state, setState] = useState<TiltState | null>(null)
+  // Recompute when the parent's refreshKey advances (any journal
+  // mutation increments it) and on storage events for cross-tab
+  // updates. computeTiltState reads getEntries synchronously so
+  // each call is cheap.
+  useEffect(() => {
+    setState(computeTiltState())
+  }, [refreshKey])
+  useEffect(() => {
+    function refresh() {
+      setState(computeTiltState())
+    }
+    window.addEventListener('storage', refresh)
+    return () => window.removeEventListener('storage', refresh)
+  }, [])
+  if (!state) return null
+
+  if (state.shouldStepAway) {
+    return (
+      <div
+        data-section="tilt-banner"
+        style={{
+          background: '#1a0a0a',
+          borderBottom: '1px solid #3a1a1a',
+          padding: '8px 16px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+        }}
+      >
+        <span style={{ color: '#f87171', fontSize: '11px' }}>⚠</span>
+        <span style={{ color: '#f87171', fontSize: '9px', lineHeight: 1.5 }}>
+          {state.reason}
+        </span>
+      </div>
+    )
+  }
+  if (state.hasTilt) {
+    return (
+      <div
+        data-section="tilt-banner"
+        style={{
+          background: '#1a1500',
+          borderBottom: '1px solid #3a2e00',
+          padding: '8px 16px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+        }}
+      >
+        <span style={{ color: '#fbbf24', fontSize: '11px' }}>⚠</span>
+        <span style={{ color: '#fbbf24', fontSize: '9px', lineHeight: 1.5 }}>
+          {state.reason}
+        </span>
+      </div>
+    )
+  }
+  // No tilt — show the small disciplined-state pill so the
+  // trader sees the rolling WR + the absence of any flag.
+  // Minimal weight; sits flush on the same divider as the
+  // tab switcher above.
+  return (
+    <div
+      data-section="tilt-pill"
+      style={{
+        padding: '6px 16px',
+        borderBottom: '1px solid #1a1a1a',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        background: '#0c0c0c',
+      }}
+    >
+      <span style={{ color: '#666666', fontSize: '8px', letterSpacing: '0.1em' }}>
+        ÉTAT — DISCIPLINÉ
+      </span>
+      <span
+        style={{
+          color: '#888888',
+          fontSize: '9px',
+          fontFeatureSettings: '"tnum"',
+        }}
+      >
+        {state.rollingWinRate !== null ? (
+          <>
+            <span style={{ color: '#b0b0b0' }}>
+              {state.rollingWinRate}%
+            </span>
+            <span style={{ color: '#444444' }}>
+              {' '}sur {state.rollingDecided}
+            </span>
+          </>
+        ) : (
+          <span style={{ color: '#444444' }}>pas encore assez de trades</span>
+        )}
+      </span>
+    </div>
+  )
 }
 
 // Shared bar layout for accuracy rows in MEMORY tab. label on the
@@ -751,6 +865,14 @@ export default function JournalPanel({ isOpen, onClose }: JournalPanelProps) {
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
           {activeTab === 'JOURNAL' ? (
             <>
+              {/* [PHASE-7] Anti-tilt strip — sits above the
+                  new-entry form so the trader sees their state
+                  BEFORE adding a new trade. Only renders the
+                  full warning when tilt signals are active;
+                  otherwise shows a compact rolling-WR pill.
+                  refreshKey is the journal entries length so
+                  closing/adding a trade triggers a recompute. */}
+              <TiltStrip refreshKey={journal.entries.length} />
               <NewEntryForm onSubmit={handleAdd} />
               <div style={{ flex: 1, overflowY: 'auto', padding: '8px 0' }}>
                 {journal.entries.length === 0 ? (
