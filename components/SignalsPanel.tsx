@@ -330,6 +330,110 @@ export default function SignalsPanel() {
         )}
       </div>
 
+      {/* [PHASE-8] Optional macro expansion — VIX, JPY, OIL, BTC.
+          Each renders only when the upstream returned a value
+          (route returns the field omitted on per-ticker failure).
+          Same chip vocabulary as DXY/US10Y so the strip reads
+          uniformly. */}
+      {data?.vix ? (
+        <div style={chipStyle}>
+          <Tooltip
+            position="bottom"
+            content="Indice de volatilité implicite du S&P 500 — proxy du risk-off. VIX en hausse = aversion au risque = flux haussier sur l'or. Au-dessus de 25 = stress de marché significatif."
+          >
+            <span style={chipLabelStyle}>VIX</span>
+          </Tooltip>
+          <span
+            style={{
+              color: NEUTRAL_VALUE_COLOR,
+              fontSize: '11px',
+              fontWeight: 500,
+              padding: '1px 3px',
+            }}
+          >
+            {data.vix.price.toFixed(2)}
+          </span>
+          <span style={{ color: changeColor(data.vix.change), fontSize: '9px' }}>
+            {formatPct(data.vix.changePct)}
+          </span>
+        </div>
+      ) : null}
+
+      {data?.jpy ? (
+        <div style={chipStyle}>
+          <Tooltip
+            position="bottom"
+            content="USD/JPY — proxy de la devise refuge. Yen fort (USD/JPY en baisse) = risk-off = haussier pour l'or. Le couple suit souvent les rendements US 10Y de près."
+          >
+            <span style={chipLabelStyle}>JPY</span>
+          </Tooltip>
+          <span
+            style={{
+              color: NEUTRAL_VALUE_COLOR,
+              fontSize: '11px',
+              fontWeight: 500,
+              padding: '1px 3px',
+            }}
+          >
+            {data.jpy.price.toFixed(2)}
+          </span>
+          <span style={{ color: changeColor(data.jpy.change), fontSize: '9px' }}>
+            {formatPct(data.jpy.changePct)}
+          </span>
+        </div>
+      ) : null}
+
+      {data?.oil ? (
+        <div style={chipStyle}>
+          <Tooltip
+            position="bottom"
+            content="WTI Crude front-month — proxy macro inflationniste. L'or et le pétrole convergent dans les rallies de matières premières et divergent dans les régimes purement monétaires. Surveillez le ratio or/pétrole pour le contexte."
+          >
+            <span style={chipLabelStyle}>OIL</span>
+          </Tooltip>
+          <span
+            style={{
+              color: NEUTRAL_VALUE_COLOR,
+              fontSize: '11px',
+              fontWeight: 500,
+              padding: '1px 3px',
+            }}
+          >
+            {data.oil.price.toFixed(2)}
+          </span>
+          <span style={{ color: changeColor(data.oil.change), fontSize: '9px' }}>
+            {formatPct(data.oil.changePct)}
+          </span>
+        </div>
+      ) : null}
+
+      {data?.btc ? (
+        <div style={chipStyle}>
+          <Tooltip
+            position="bottom"
+            content="Bitcoin USD — proxy du risk-on / digital gold. La corrélation BTC/or oscille : convergente en mode 'inflation hedge', divergente en mode 'risk-on'. Une divergence forte signale souvent un changement de régime de marché."
+          >
+            <span style={chipLabelStyle}>BTC</span>
+          </Tooltip>
+          <span
+            style={{
+              color: NEUTRAL_VALUE_COLOR,
+              fontSize: '11px',
+              fontWeight: 500,
+              padding: '1px 3px',
+            }}
+          >
+            {data.btc.price.toLocaleString('en-US', {
+              minimumFractionDigits: 0,
+              maximumFractionDigits: 0,
+            })}
+          </span>
+          <span style={{ color: changeColor(data.btc.change), fontSize: '9px' }}>
+            {formatPct(data.btc.changePct)}
+          </span>
+        </div>
+      ) : null}
+
       {/* SPREAD (static) */}
       <div style={chipStyle}>
         <Tooltip

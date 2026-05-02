@@ -23,6 +23,9 @@ import type { MarketSignals, SignalItem } from '@/lib/types'
 const yahooFinance = new YahooFinance()
 
 // Stable, typed fallback. Same shape as a successful response.
+// [PHASE-8] Optional vix/jpy/oil/btc are omitted so the UI
+// renders only the canonical DXY + US10Y rows during outage
+// (matches pre-Phase-8 behaviour).
 const FALLBACK: MarketSignals = {
   dxy: { price: 0, change: 0, changePct: 0 },
   us10y: { price: 0, change: 0, changePct: 0 },
@@ -45,19 +48,55 @@ async function fetchTicker(symbol: string): Promise<SignalItem> {
   }
 }
 
+// [PHASE-8] Wrapper around fetchTicker that returns null on
+// failure so a single ticker outage doesn't drag down the rest
+// of the response. Used for the optional macro expansions
+// (VIX/JPY/oil/BTC) — DXY and US10Y are still hard-required
+// (their absence triggers the route-level fallback).
+async function fetchTickerOptional(
+  symbol: string
+): Promise<SignalItem | null> {
+  try {
+    const item = await fetchTicker(symbol)
+    if (!Number.isFinite(item.price) || item.price <= 0) return null
+    return item
+  } catch (err) {
+    console.error(
+      `[/api/signals] optional ${symbol} failed:`,
+      err instanceof Error ? err.message : 'unknown'
+    )
+    return null
+  }
+}
+
 export async function GET() {
   try {
-    // Promise.all so both fetches run in parallel — total
-    // latency is the slower of the two, not the sum.
-    const [dxy, us10y] = await Promise.all([
-      fetchTicker('DX-Y.NYB'), // US Dollar Index
-      fetchTicker('^TNX'),     // CBOE 10-Year Treasury Note Yield
+    // [PHASE-8] All six fetches in parallel. Two REQUIRED
+    // (dxy + us10y) and four OPTIONAL (vix, jpy, oil, btc).
+    // Optional failures don't take down the route; they drop to
+    // null and the UI hides the corresponding row.
+    const [dxy, us10y, vix, jpy, oil, btc] = await Promise.all([
+      fetchTicker('DX-Y.NYB'),       // required: US Dollar Index
+      fetchTicker('^TNX'),           // required: CBOE 10Y yield
+      fetchTickerOptional('^VIX'),   // optional: risk-off proxy
+      fetchTickerOptional('JPY=X'),  // optional: USD/JPY safe-haven
+      fetchTickerOptional('CL=F'),   // optional: WTI front-month
+      fetchTickerOptional('BTC-USD'),// optional: risk-on proxy
     ])
 
     const data: MarketSignals = { dxy, us10y }
+    if (vix) data.vix = vix
+    if (jpy) data.jpy = jpy
+    if (oil) data.oil = oil
+    if (btc) data.btc = btc
     return NextResponse.json(data)
   } catch (err) {
-    console.error('[/api/signals] fetch failed:', err)
+    // [SECURITY L1] Log the message only — full SDK errors leak
+    // internal node_modules paths.
+    console.error(
+      '[/api/signals] fetch failed:',
+      err instanceof Error ? err.message : 'unknown'
+    )
     return NextResponse.json(FALLBACK, { status: 200 })
   }
 }

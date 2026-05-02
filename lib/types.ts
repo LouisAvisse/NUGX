@@ -52,9 +52,30 @@ export interface SignalItem {
 }
 
 // Bundled macro signals payload from /api/signals.
+//
+// [PHASE-8] Expanded beyond DXY + US10Y so the trader sees the
+// full risk-asset complex. Each new signal contributes a piece
+// of context that gold actively responds to:
+//
+//   vix   — equity volatility / risk-off proxy. High VIX often
+//           coincides with gold strength (safe-haven flow).
+//   jpy   — USD/JPY ; the cleanest safe-haven cross. JPY
+//           strength = risk-off = bullish gold.
+//   oil   — WTI front-month. Diverges from gold in inflation
+//           regimes and converges during commodity rallies.
+//   btc   — risk-on / digital-gold proxy. Strong correlation
+//           swings make BTC a useful "is this a real safe-haven
+//           bid?" check.
+//
+// All optional so older clients (and outage fallbacks) still
+// validate. SignalsPanel renders rows only for fields present.
 export interface MarketSignals {
   dxy: SignalItem     // US Dollar Index — inverse to gold most days
   us10y: SignalItem   // US 10-Year Treasury yield (%)
+  vix?: SignalItem    // CBOE volatility index — risk-off proxy
+  jpy?: SignalItem    // USD/JPY — safe-haven currency proxy
+  oil?: SignalItem    // WTI crude front-month — commodity macro
+  btc?: SignalItem    // Bitcoin USD — risk-on / digital-gold proxy
 }
 
 // ─────────────────────────────────────────────────────────────────
