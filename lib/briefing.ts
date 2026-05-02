@@ -32,6 +32,36 @@ function todayUtcDate(): string {
   return new Date().toISOString().slice(0, 10)
 }
 
+// [SECURITY L6] Per-record schema validator. Drop briefings with
+// missing or wrong-typed load-bearing fields — getTodaysBriefing
+// finds by `date`, shouldGenerateBriefing falls back to it; a
+// corrupt date or missing content otherwise silently breaks the
+// "have we already generated today?" check.
+function isValidBriefing(b: unknown): b is SessionBriefing {
+  if (!b || typeof b !== 'object') return false
+  const x = b as Record<string, unknown>
+  if (
+    typeof x.id !== 'string' ||
+    typeof x.date !== 'string' ||
+    typeof x.session !== 'string' ||
+    typeof x.generatedAt !== 'string' ||
+    !x.content ||
+    typeof x.content !== 'object'
+  ) {
+    return false
+  }
+  const c = x.content as Record<string, unknown>
+  return (
+    typeof c.overnightSummary === 'string' &&
+    typeof c.keyLevels === 'string' &&
+    typeof c.calendarRisk === 'string' &&
+    typeof c.sessionBias === 'string' &&
+    typeof c.watchFor === 'string' &&
+    typeof c.bias === 'string' &&
+    typeof c.confidence === 'string'
+  )
+}
+
 function readAll(): SessionBriefing[] {
   if (typeof window === 'undefined') return []
   try {
@@ -39,7 +69,9 @@ function readAll(): SessionBriefing[] {
     if (!raw) return []
     const parsed = JSON.parse(raw)
     if (!Array.isArray(parsed)) return []
-    return parsed as SessionBriefing[]
+    // [SECURITY L6] Drop schema-invalid briefings — they'd otherwise
+    // cause the auto-generation check to misfire.
+    return parsed.filter(isValidBriefing)
   } catch {
     return []
   }

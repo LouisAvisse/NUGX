@@ -33,8 +33,32 @@ function genId(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
 }
 
-// Defensive read — JSON parse failures, non-array payloads, and
-// missing keys all return [] so callers never have to wrap.
+// [SECURITY L6] Per-record schema validator. Drop entries with
+// missing or wrong-typed load-bearing fields — calculatePnL math
+// otherwise silently produces NaN when entry/exit/direction get
+// corrupted (other tab write, DevTools edit, future migration).
+const VALID_DIRECTIONS = new Set(['LONG', 'SHORT'])
+function isValidEntry(e: unknown): e is JournalEntry {
+  if (!e || typeof e !== 'object') return false
+  const x = e as Record<string, unknown>
+  return (
+    typeof x.id === 'string' &&
+    typeof x.direction === 'string' &&
+    VALID_DIRECTIONS.has(x.direction) &&
+    typeof x.entry === 'number' &&
+    Number.isFinite(x.entry) &&
+    typeof x.stop === 'number' &&
+    Number.isFinite(x.stop) &&
+    typeof x.target === 'number' &&
+    Number.isFinite(x.target) &&
+    typeof x.session === 'string' &&
+    typeof x.notes === 'string' &&
+    typeof x.createdAt === 'string'
+  )
+}
+
+// Defensive read — JSON parse failures, non-array payloads,
+// missing keys, and per-record schema violations all return [].
 function readAll(): JournalEntry[] {
   if (typeof window === 'undefined') return []
   try {
@@ -42,7 +66,9 @@ function readAll(): JournalEntry[] {
     if (!raw) return []
     const parsed = JSON.parse(raw)
     if (!Array.isArray(parsed)) return []
-    return parsed as JournalEntry[]
+    // [SECURITY L6] Per-record schema check — drop corrupted rows
+    // instead of letting them poison P&L math downstream.
+    return parsed.filter(isValidEntry)
   } catch {
     return []
   }

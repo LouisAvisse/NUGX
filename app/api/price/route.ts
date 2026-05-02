@@ -40,25 +40,48 @@ export async function GET() {
 
     const raw = await res.json()
 
-    // Map gold-api.com field names → GoldPrice. Each `?? 0`
-    // guards against missing fields (e.g. fresh trading day).
-    // gold-api returns `timestamp` in seconds; multiply by 1000
-    // to match JS Date.now() / new Date().getTime() convention.
+    // [SECURITY L5] Range-check every numeric field. gold-api.com
+    // is a public, unauthenticated upstream; a poisoned response
+    // (price = -1e9, timestamp = 9e15, NaN, string, etc.) would
+    // otherwise propagate into the chart, the AI prompt, and the
+    // ATR/level math the trader sees. A field that fails the
+    // sanity check falls back to 0 — same posture as the missing-
+    // field case the original code already handled with `?? 0`.
+    //
+    // PRICE_MAX (1e6) is generous: gold-api quotes USD/oz in the
+    // low thousands, so 1e6 catches any unit confusion. The
+    // change/percent bounds are similarly loose to avoid rejecting
+    // legitimate intra-day swings.
+    const PRICE_MAX = 1_000_000
+    const safeNum = (v: unknown, min: number, max: number): number => {
+      const n = typeof v === 'number' ? v : Number(v)
+      return Number.isFinite(n) && n >= min && n <= max ? n : 0
+    }
+    // Timestamp is seconds-since-epoch from gold-api; we multiply
+    // by 1000 below. Bound to a 100-year window so a corrupted
+    // value can't produce an invalid Date downstream.
+    const tsMin = 0
+    const tsMax = 4_102_444_800 // year 2100 in unix seconds
+
     const data: GoldPrice = {
-      price: raw.price ?? 0,
-      change: raw.ch ?? 0,
-      changePct: raw.chp ?? 0,
-      high: raw.high ?? 0,
-      low: raw.low ?? 0,
-      open: raw.open ?? 0,
-      prevClose: raw.prev_close ?? 0,
-      timestamp: (raw.timestamp ?? 0) * 1000,
+      price: safeNum(raw.price, 0, PRICE_MAX),
+      change: safeNum(raw.ch, -PRICE_MAX, PRICE_MAX),
+      changePct: safeNum(raw.chp, -1000, 1000),
+      high: safeNum(raw.high, 0, PRICE_MAX),
+      low: safeNum(raw.low, 0, PRICE_MAX),
+      open: safeNum(raw.open, 0, PRICE_MAX),
+      prevClose: safeNum(raw.prev_close, 0, PRICE_MAX),
+      timestamp: safeNum(raw.timestamp, tsMin, tsMax) * 1000,
     }
 
     return NextResponse.json(data)
   } catch (err) {
-    // Log server-side; the client receives a clean fallback.
-    console.error('[/api/price] fetch failed:', err)
+    // [SECURITY L1] Log only the message — full error objects
+    // can leak internal node_modules paths.
+    console.error(
+      '[/api/price] fetch failed:',
+      err instanceof Error ? err.message : 'unknown'
+    )
     return NextResponse.json(FALLBACK, { status: 200 })
   }
 }

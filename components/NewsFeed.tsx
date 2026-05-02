@@ -276,7 +276,16 @@ export default function NewsFeed() {
           key={`${a.url}-${idx}`}
           onMouseEnter={() => setHovered(idx)}
           onMouseLeave={() => setHovered(null)}
-          onClick={() => window.open(a.url, '_blank')}
+          onClick={() => {
+            // [SECURITY M1] Defense-in-depth: even though the
+            // /api/news route now drops non-http(s) URLs, gate
+            // the click here too so a future refactor or direct
+            // store mutation can't reintroduce a javascript:/data:
+            // sink. noopener,noreferrer prevents the opened tab
+            // from controlling window.opener (reverse-tabnabbing).
+            if (!/^https?:\/\//i.test(a.url)) return
+            window.open(a.url, '_blank', 'noopener,noreferrer')
+          }}
           style={{
             padding: '10px 12px',
             borderBottom: '1px solid #1a1a1a',

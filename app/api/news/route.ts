@@ -191,6 +191,18 @@ function buildMockArticles(): NewsArticle[] {
   ]
 }
 
+// [SECURITY M1/L7] Allow only http/https article URLs through.
+// The <link> tag from Google News RSS is read with a regex parser
+// (no scheme enforcement of its own), so a poisoned feed could
+// emit `<link>javascript:alert(...)</link>` — which would then
+// flow into NewsFeed's window.open() click handler and execute in
+// the page origin. Validating once at the route is the canonical
+// fix: it closes the gap regardless of how the URL is rendered
+// downstream (text, key, href, window.open).
+function isSafeArticleUrl(url: string): boolean {
+  return /^https?:\/\//i.test(url)
+}
+
 // Decode the handful of HTML entities Google News RSS actually
 // emits in titles. Full-spec HTML decoding would need a library;
 // in practice the feed only uses these five plus the numeric
@@ -244,7 +256,25 @@ const GOOGLE_NEWS_RSS = (() => {
 // behaviour (newsdata responses were sliced at 10).
 const MAX_ARTICLES = 10
 
+// [SECURITY L4/L10] Bounds on the upstream fetch — Google News
+// usually returns ~50KB for our query, so 1MB is generous; the
+// cap exists so a pathological multi-megabyte response can't
+// exhaust memory before the regex parser even runs. The 8s
+// timeout protects against an upstream hang tying up the route
+// indefinitely (Node's default fetch has no timeout).
+const RSS_FETCH_TIMEOUT_MS = 8000
+const RSS_MAX_BYTES = 1_000_000
+
 export async function GET() {
+  // [SECURITY L4] Abort the fetch after RSS_FETCH_TIMEOUT_MS so a
+  // hung upstream can't keep a Next.js worker pinned. Cleared in
+  // the finally block whether the fetch succeeded or threw.
+  const abort = new AbortController()
+  const timeoutHandle = setTimeout(
+    () => abort.abort(),
+    RSS_FETCH_TIMEOUT_MS
+  )
+
   try {
     const res = await fetch(GOOGLE_NEWS_RSS, {
       // Hook polls every 15min — no Next data cache wanted.
@@ -256,13 +286,26 @@ export async function GET() {
         'User-Agent':
           'Mozilla/5.0 (compatible; NUGX-Dashboard/1.0; +https://example.com)',
       },
+      signal: abort.signal,
     })
 
     if (!res.ok) {
       throw new Error(`google news rss responded ${res.status}`)
     }
 
-    const xml = await res.text()
+    // [SECURITY L4/L10] Cap the response size before parsing.
+    // The old code read .text() then sliced — which still allocates
+    // the full body. We slice the string after read (cheap clone)
+    // AND set a Content-Length cap to short-circuit obviously
+    // oversized payloads before allocating.
+    const declaredLen = Number(res.headers.get('content-length') ?? '0')
+    if (declaredLen > RSS_MAX_BYTES) {
+      throw new Error(`google news rss too large: ${declaredLen} bytes`)
+    }
+    const fullXml = await res.text()
+    const xml = fullXml.length > RSS_MAX_BYTES
+      ? fullXml.slice(0, RSS_MAX_BYTES)
+      : fullXml
     if (!xml || !xml.includes('<item>')) {
       throw new Error('Empty or malformed RSS feed')
     }
@@ -287,7 +330,10 @@ export async function GET() {
           sentiment: tagSentiment(title),
         } satisfies NewsArticle
       })
-      .filter((a) => !!a.title && !!a.url)
+      // [SECURITY M1/L7] Drop any item whose URL isn't http(s):
+      // — the click handler in NewsFeed.tsx hands a.url straight
+      // to window.open, which executes javascript:/data: URIs.
+      .filter((a) => !!a.title && !!a.url && isSafeArticleUrl(a.url))
       .slice(0, MAX_ARTICLES)
 
     if (articles.length === 0) {
@@ -299,10 +345,19 @@ export async function GET() {
     // Network/parse failure — return realistic mock articles so
     // the dashboard doesn't go blank. The real-API path is
     // covered above; this branch only fires on outage.
-    console.error('[/api/news] fetch failed:', err)
+    // [SECURITY L1] Log only the message; full error objects can
+    // include internal node_modules paths we don't want shipped.
+    console.error(
+      '[/api/news] fetch failed:',
+      err instanceof Error ? err.message : 'unknown'
+    )
     return NextResponse.json(
       { articles: buildMockArticles() } satisfies NewsResponse,
       { status: 200 }
     )
+  } finally {
+    // Always clear the abort timer so it doesn't fire on a
+    // subsequent request that reuses the event loop tick.
+    clearTimeout(timeoutHandle)
   }
 }

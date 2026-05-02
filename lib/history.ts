@@ -67,10 +67,39 @@ function parseFirstNumber(s: string | undefined): number {
   return parsePrice(s)
 }
 
+// [SECURITY L6] Per-record schema validation. Without this,
+// downstream math (bucketStats, accuracy %) silently produces NaN
+// when a stray field arrives as the wrong type — e.g. another
+// browser tab, a DevTools edit, or a future schema migration
+// writes confluenceScore: "8" instead of 8. Validating on read
+// drops corrupted records rather than letting NaN poison the
+// MEMORY tab + the personal-patterns context fed to Claude.
+//
+// We check load-bearing fields only (id, recommendation,
+// confluenceScore, session, entryType) — fields used by
+// classifyOutcome / bucketStats / groupBy. Optional outcome
+// fields are not validated; they're already typed as optional.
+const VALID_RECOMMENDATIONS = new Set(['LONG', 'SHORT', 'FLAT'])
+const VALID_ENTRY_TYPES = new Set(['IDEAL', 'AGGRESSIVE', 'WAIT'])
+function isValidRecord(r: unknown): r is AnalysisHistoryRecord {
+  if (!r || typeof r !== 'object') return false
+  const x = r as Record<string, unknown>
+  return (
+    typeof x.id === 'string' &&
+    typeof x.generatedAt === 'string' &&
+    typeof x.confluenceScore === 'number' &&
+    typeof x.session === 'string' &&
+    typeof x.recommendation === 'string' &&
+    VALID_RECOMMENDATIONS.has(x.recommendation) &&
+    typeof x.entryType === 'string' &&
+    VALID_ENTRY_TYPES.has(x.entryType)
+  )
+}
+
 // Read + parse the stored array. Defensive against any kind of
 // storage corruption: missing key, non-JSON, non-array, missing
-// fields. Always returns an array; callers don't need to wrap
-// in their own try/catch.
+// fields, or per-record schema violations. Always returns an
+// array; callers don't need to wrap in their own try/catch.
 function readAll(): AnalysisHistoryRecord[] {
   if (typeof window === 'undefined') return []
   try {
@@ -78,7 +107,9 @@ function readAll(): AnalysisHistoryRecord[] {
     if (!raw) return []
     const parsed = JSON.parse(raw)
     if (!Array.isArray(parsed)) return []
-    return parsed as AnalysisHistoryRecord[]
+    // [SECURITY L6] Drop records that don't pass the per-record
+    // schema check — the array stays well-typed downstream.
+    return parsed.filter(isValidRecord)
   } catch {
     return []
   }

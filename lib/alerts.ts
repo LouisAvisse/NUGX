@@ -37,6 +37,27 @@ function genId(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
 }
 
+// [SECURITY L6] Per-record schema validator. Drop entries with
+// missing or wrong-typed load-bearing fields — getActiveAlerts()
+// filters by triggeredAt + dismissed, both of which silently
+// misbehave (NaN dates, truthy strings) on corrupted records.
+const VALID_SEVERITIES = new Set(['WARNING', 'CRITICAL'])
+function isValidAlert(a: unknown): a is InvalidationAlert {
+  if (!a || typeof a !== 'object') return false
+  const x = a as Record<string, unknown>
+  return (
+    typeof x.id === 'string' &&
+    typeof x.triggeredAt === 'string' &&
+    typeof x.severity === 'string' &&
+    VALID_SEVERITIES.has(x.severity) &&
+    typeof x.message === 'string' &&
+    typeof x.priceAtTrigger === 'number' &&
+    Number.isFinite(x.priceAtTrigger) &&
+    typeof x.analysisId === 'string' &&
+    typeof x.dismissed === 'boolean'
+  )
+}
+
 function readAll(): InvalidationAlert[] {
   if (typeof window === 'undefined') return []
   try {
@@ -44,7 +65,9 @@ function readAll(): InvalidationAlert[] {
     if (!raw) return []
     const parsed = JSON.parse(raw)
     if (!Array.isArray(parsed)) return []
-    return parsed as InvalidationAlert[]
+    // [SECURITY L6] Drop schema-invalid alerts so getActiveAlerts
+    // doesn't compare against malformed timestamps.
+    return parsed.filter(isValidAlert)
   } catch {
     return []
   }
