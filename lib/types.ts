@@ -144,9 +144,31 @@ export interface ChartSeries {
 // snapshot + chart series for the GoldChart component.
 // (Pre-[#50] the route returned the indicators object directly;
 // the hook + route were updated together.)
+//
+// [SPRINT-1] expansion — the route additionally returns three
+// per-timeframe candle/indicator bundles (`tf15m`, `tf1h`, `tf4h`)
+// for multi-timeframe confluence analysis, plus a `patterns` array
+// of any candlestick / structure patterns detected on the latest
+// candles across those timeframes. Existing consumers can keep
+// reading `indicators` + `chart` unchanged; new consumers opt in
+// to the multi-timeframe + pattern fields.
 export interface TechnicalsResponse {
   indicators: TechnicalIndicators
   chart: ChartSeries
+
+  // Multi-timeframe candle bundles — one per timeframe Claude can
+  // reason over when scoring confluence. See TimeframeCandles.
+  // Optional during the [SPRINT-1] types-only landing so the
+  // existing /api/technicals route still type-checks; [SPRINT-2]
+  // populates them and consumers can rely on their presence.
+  tf15m?: TimeframeCandles
+  tf1h?: TimeframeCandles
+  tf4h?: TimeframeCandles
+
+  // Candlestick + structure patterns detected server-side across
+  // the timeframes above. Empty array when nothing fires; absent
+  // during the [SPRINT-1] types-only landing (see note above).
+  patterns?: DetectedPattern[]
 }
 
 // AI levels overlaid on the GoldChart as horizontal price lines.
@@ -427,4 +449,282 @@ export interface JournalEntry {
   exitPrice?: number          // set on close
   createdAt: string           // ISO 8601 — when the trade was opened
   closedAt?: string           // ISO 8601 — set on close
+}
+
+// ─────────────────────────────────────────────────────────────────
+// [SPRINT-1] Multi-timeframe candles
+// Added to power the upcoming 15M/1H/4H confluence engine and chart
+// switcher. /api/technicals will fetch all three timeframes in
+// parallel; the chart component will toggle between them.
+// ─────────────────────────────────────────────────────────────────
+
+// The three timeframes the dashboard reasons over. 15M is for
+// entry-timing precision, 1H is the primary trade-direction view
+// (matches existing TechnicalIndicators snapshot), 4H is the broad
+// trend filter. Anything else (1D, 5M) is intentionally out of
+// scope — keep the surface small.
+export type Timeframe = '15M' | '1H' | '4H'
+
+// Convenient alias used by per-timeframe series fields below. The
+// shape is identical to ChartLinePoint (the existing 1H series
+// type); we keep both names so the timeframe API reads naturally
+// (`ema20Series: ChartSeriesPoint[]`) without forcing existing
+// callers of ChartLinePoint to rename.
+export type ChartSeriesPoint = ChartLinePoint
+
+// One full bundle of candles + EMA series + scalar indicator
+// snapshot for a single timeframe. Server fills these per-TF in
+// /api/technicals; the client picks the active one based on the
+// chart switcher state. Indicator fields are typed as `string` /
+// `number` here (not the strong unions like Trend/RsiZone) on
+// purpose — the multi-TF detector emits those values as plain
+// strings for forward compatibility, and consumers narrow when
+// they care.
+export interface TimeframeCandles {
+  timeframe: Timeframe
+  candles: ChartCandle[]            // raw OHLCV for this TF
+  ema20Series: ChartSeriesPoint[]   // aligned to candle timestamps
+  ema50Series: ChartSeriesPoint[]   // aligned to candle timestamps
+
+  // Scalar values trader-friendly to read at a glance — also fed
+  // into the multi-TF confluence prompt later in the sprint.
+  indicators: {
+    ema20: number
+    ema50: number
+    rsi: number
+    macd: number
+    macdHistogram: number
+    macdCross: string               // 'BULLISH_CROSS' | 'BEARISH_CROSS' | 'NONE'
+    trend: string                   // 'UPTREND' | 'DOWNTREND' | 'RANGING'
+    rsiZone: string                 // 'OVERBOUGHT' | 'OVERSOLD' | 'NEUTRAL'
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// [SPRINT-1] Pattern detection
+// Server-side detector flags candlestick + structure patterns on
+// the latest candles of each timeframe. The chart renders these as
+// markers; the analyze prompt cites them as confluence inputs.
+// ─────────────────────────────────────────────────────────────────
+
+// Closed set of patterns the detector currently knows about.
+// Singles are 1-candle (HAMMER, DOJI, MARUBOZU). Pairs are
+// 2-candle (ENGULFING, INSIDE_BAR). Structure patterns scan the
+// last N candles (HH/HL, LH/LL, DOUBLE_TOP/BOTTOM).
+export type PatternName =
+  | 'BULLISH_ENGULFING'
+  | 'BEARISH_ENGULFING'
+  | 'HAMMER'
+  | 'SHOOTING_STAR'
+  | 'INSIDE_BAR'
+  | 'BULLISH_MARUBOZU'
+  | 'BEARISH_MARUBOZU'
+  | 'DOJI'
+  | 'HIGHER_HIGH_HIGHER_LOW'
+  | 'LOWER_HIGH_LOWER_LOW'
+  | 'DOUBLE_TOP_FORMING'
+  | 'DOUBLE_BOTTOM_FORMING'
+
+// Directional read of a pattern for gold. NEUTRAL covers
+// compression / indecision patterns (INSIDE_BAR, DOJI) where
+// direction is "pending breakout" rather than committed.
+export type PatternDirection = 'BULLISH' | 'BEARISH' | 'NEUTRAL'
+
+// How much weight the trader should put on this pattern. HIGH for
+// strong reversal / continuation signals (engulfing, hammer,
+// HH/HL), MEDIUM for compression (inside bar, doji), LOW reserved
+// for future weak signals.
+export type PatternSignificance = 'HIGH' | 'MEDIUM' | 'LOW'
+
+// One detected pattern instance. `detectedAt` is ISO 8601 (when
+// the server observed it, not the candle timestamp). `description`
+// is human-readable copy used in tooltips and the analyze prompt
+// — e.g. "Bullish engulfing on 4H — strong reversal candle".
+export interface DetectedPattern {
+  pattern: PatternName
+  timeframe: Timeframe
+  direction: PatternDirection
+  significance: PatternSignificance
+  description: string
+  detectedAt: string                // ISO 8601
+}
+
+// ─────────────────────────────────────────────────────────────────
+// [SPRINT-1] Analysis history + personal pattern stats
+// Persisted record of every analysis the trader runs, plus the
+// follow-up outcome checks at +2H and +4H. Drives the personal
+// pattern dashboard ("you're 72% accurate in NY/London overlap").
+// ─────────────────────────────────────────────────────────────────
+
+// What actually happened to the trade idea after the analysis was
+// generated. HIT_TARGET / HIT_STOP are terminal; OPEN means still
+// running; INCONCLUSIVE means neither level hit within the check
+// window (price drifted sideways).
+export type TradeOutcome =
+  | 'HIT_TARGET'
+  | 'HIT_STOP'
+  | 'OPEN'
+  | 'INCONCLUSIVE'
+
+// One full historical record of an analysis run. Created on every
+// /api/analyze success; the +2H / +4H fields are filled in later
+// by a follow-up checker that compares price action to the
+// recorded entry/stop/target. All outcome fields are optional so
+// fresh records (still inside the 2H window) are valid.
+export interface AnalysisHistoryRecord {
+  id: string                        // uuid — stable key
+  generatedAt: string               // ISO 8601 — matches AnalysisResult
+  priceAtAnalysis: number           // spot at the moment of analysis
+
+  // Snapshot of the analysis itself — all fields mirror
+  // AnalysisResult so we can rebuild a card from history alone.
+  bias: Bias
+  confidence: Confidence
+  recommendation: Recommendation
+  confluenceScore: number
+  confluenceTotal: number
+  session: string                   // session name at analysis time
+  entryType: EntryType
+  marketCondition: MarketCondition
+  entry: string
+  stop: string
+  target: string
+  invalidationLevel: string
+  riskReward: string
+
+  // Outcome tracking — filled in by the follow-up checker.
+  // priceAt2H / priceAt4H are the spot prices at the check time;
+  // outcome2H / outcome4H classify what happened relative to the
+  // entry/stop/target. Both pairs are independent — a trade can
+  // be OPEN at 2H and HIT_TARGET at 4H.
+  priceAt2H?: number
+  priceAt4H?: number
+  checkedAt2H?: string              // ISO 8601
+  checkedAt4H?: string              // ISO 8601
+  outcome2H?: TradeOutcome
+  outcome4H?: TradeOutcome
+}
+
+// Aggregate stats computed from AnalysisHistoryRecord[]. Drives
+// the "personal patterns" panel: overall accuracy + breakdowns by
+// session / confluence score / entry type, plus a single insight
+// string the UI renders verbatim ("Best results: NY/London
+// overlap with confluence ≥ 6 — 78% accuracy").
+//
+// Sub-buckets share the same shape: `count` analyses tracked,
+// `accurate` (HIT_TARGET) wins, `accuracy` as a 0-100 percentage
+// for direct rendering.
+export interface PersonalPatterns {
+  totalAnalyses: number             // every record, including OPEN
+  totalWithOutcome: number          // only records with terminal outcome
+  overallAccuracy: number           // 0-100, HIT_TARGET / totalWithOutcome
+
+  // Breakdown by session at analysis time (Tokyo, London, ...).
+  bySession: Record<string, {
+    count: number
+    accurate: number
+    accuracy: number
+  }>
+
+  // Breakdown by confluenceScore bucket (0..confluenceTotal).
+  byConfluenceScore: Record<number, {
+    count: number
+    accurate: number
+    accuracy: number
+  }>
+
+  // Breakdown by EntryType (IDEAL, AGGRESSIVE, WAIT).
+  byEntryType: Record<string, {
+    count: number
+    accurate: number
+    accuracy: number
+  }>
+
+  // Top-line insights — null when there isn't enough data yet.
+  bestSession: string | null
+  bestConfluenceThreshold: number | null
+
+  // One-sentence rendered summary for the UI banner. Computed
+  // server-side so the client doesn't reinvent the heuristic.
+  insight: string
+}
+
+// ─────────────────────────────────────────────────────────────────
+// [SPRINT-1] Session briefing
+// Pre-session AI-written summary the trader reads before the bell.
+// Generated once per session per day; persisted so reopening the
+// dashboard mid-session shows the same briefing.
+// ─────────────────────────────────────────────────────────────────
+
+// Body of the briefing — five plain-text fields the UI renders as
+// stacked sections, plus a directional read so the briefing card
+// can show a bias chip at a glance.
+export interface SessionBriefingContent {
+  overnightSummary: string          // what moved while you were away
+  keyLevels: string                 // resistance + support to watch
+  calendarRisk: string              // upcoming HIGH-impact events
+  sessionBias: string               // expected directional pressure
+  watchFor: string                  // specific catalysts / triggers
+  bias: Bias
+  confidence: Confidence
+}
+
+// Wrapper persisted in localStorage, keyed by `${date}_${session}`.
+// `date` is YYYY-MM-DD UTC so day rollover is unambiguous across
+// timezones; `session` is the SessionName as a string.
+export interface SessionBriefing {
+  id: string                        // uuid — stable key
+  date: string                      // YYYY-MM-DD UTC
+  session: string                   // SessionName at briefing time
+  generatedAt: string               // ISO 8601 — when AI wrote it
+  content: SessionBriefingContent
+}
+
+// ─────────────────────────────────────────────────────────────────
+// [SPRINT-1] Invalidation alerts
+// When live price crosses an analysis's invalidationLevel the
+// dashboard fires an alert toast/banner so the trader doesn't
+// keep acting on a thesis that's already broken.
+// ─────────────────────────────────────────────────────────────────
+
+// WARNING fires as price approaches invalidation; CRITICAL fires
+// when it actually crosses. Both share the same banner shape and
+// can be dismissed independently.
+export type AlertSeverity = 'WARNING' | 'CRITICAL'
+
+// One invalidation alert event. `analysisId` links back to the
+// AnalysisHistoryRecord that generated the level so the UI can
+// jump to the original card. `dismissed` flips true when the
+// trader closes the banner — persisted so the alert doesn't
+// re-show on next page load.
+export interface InvalidationAlert {
+  id: string                        // uuid
+  triggeredAt: string               // ISO 8601
+  severity: AlertSeverity
+  message: string                   // human-readable banner copy
+  priceAtTrigger: number            // spot when the alert fired
+  analysisId: string                // FK → AnalysisHistoryRecord.id
+  dismissed: boolean
+}
+
+// ─────────────────────────────────────────────────────────────────
+// [SPRINT-1] Confidence calibration
+// Stats that answer "when Claude says HIGH confidence, how often
+// is it right?". Drives a small calibration card in the Copilot
+// footer once enough outcomes have been recorded.
+// ─────────────────────────────────────────────────────────────────
+
+// Per-bucket accuracy. `null` for a bucket means we don't have
+// any outcomes in that band yet (don't render a number that
+// would be 0/0). `isCalibrated` gates whether the UI shows the
+// card at all — below the threshold the sample is too small to
+// be meaningful.
+export interface ConfidenceCalibration {
+  totalRecords: number              // every history record
+  recordsWithOutcome: number        // records with terminal outcome
+  highConfidenceAccuracy: number | null     // 0-100 or null
+  mediumConfidenceAccuracy: number | null
+  lowConfidenceAccuracy: number | null
+  isCalibrated: boolean             // true once recordsWithOutcome >= 10
+  lastUpdated: string               // ISO 8601 — last recompute
 }
