@@ -506,12 +506,54 @@ export default function AnalysisPanel({ onLevelsUpdate }: AnalysisPanelProps = {
       newsBearishCount,
       newsNeutralCount,
       topHeadlines: articles.slice(0, 6).map((a) => a.title),
+
+      // [SPRINT-4] Multi-timeframe context. Pulled from the same
+      // useTechnicals hook that drives the chart's TF switcher —
+      // the per-TF bundles carry compact scalar reads (trend, RSI
+      // + zone, MACD histogram + cross, EMA20/50). priceVsEma20
+      // is computed inline from the live spot vs the per-TF EMA20
+      // since the per-TF bundle doesn't carry that flag itself.
+      tf15m: {
+        trend: technicals.tf15m?.indicators.trend ?? 'RANGING',
+        rsi: technicals.tf15m?.indicators.rsi ?? 50,
+        rsiZone: technicals.tf15m?.indicators.rsiZone ?? 'NEUTRAL',
+        macdHistogram: technicals.tf15m?.indicators.macdHistogram ?? 0,
+        macdCross: technicals.tf15m?.indicators.macdCross ?? 'NONE',
+        ema20: technicals.tf15m?.indicators.ema20 ?? 0,
+        ema50: technicals.tf15m?.indicators.ema50 ?? 0,
+        priceVsEma20:
+          (goldPrice.data?.price ?? 0) >= (technicals.tf15m?.indicators.ema20 ?? 0)
+            ? 'ABOVE'
+            : 'BELOW',
+      },
+      tf4h: {
+        trend: technicals.tf4h?.indicators.trend ?? 'RANGING',
+        rsi: technicals.tf4h?.indicators.rsi ?? 50,
+        rsiZone: technicals.tf4h?.indicators.rsiZone ?? 'NEUTRAL',
+        macdHistogram: technicals.tf4h?.indicators.macdHistogram ?? 0,
+        macdCross: technicals.tf4h?.indicators.macdCross ?? 'NONE',
+        ema20: technicals.tf4h?.indicators.ema20 ?? 0,
+        ema50: technicals.tf4h?.indicators.ema50 ?? 0,
+        priceVsEma20:
+          (goldPrice.data?.price ?? 0) >= (technicals.tf4h?.indicators.ema20 ?? 0)
+            ? 'ABOVE'
+            : 'BELOW',
+      },
+
+      // Detected patterns ride along on the analyze request. The
+      // route's user message has a dedicated DETECTED PATTERNS
+      // section that lists each one; if the array is empty the
+      // section reads "No significant patterns detected".
+      detectedPatterns: technicals.patterns ?? [],
     }
   }, [
     goldPrice.data,
     signals.data,
     news.articles,
     technicals.indicators,
+    technicals.tf15m,
+    technicals.tf4h,
+    technicals.patterns,
     calendar.data,
   ])
 

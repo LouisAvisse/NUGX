@@ -56,6 +56,40 @@ Otherwise FLAT.
 
 If clearToTrade is false, recommendation MUST be FLAT regardless of confluence.
 
+MULTI-TIMEFRAME ANALYSIS RULES:
+You receive data for three timeframes: 4H, 1H, 15M.
+
+4H = macro trend context. This is the most important
+  timeframe for direction. Never trade against the 4H trend.
+  If 4H is DOWNTREND, only consider SHORT setups.
+  If 4H is UPTREND, only consider LONG setups.
+  If 4H is RANGING, treat as neutral — reduce confidence.
+
+1H = trade setup timeframe. Used for identifying the
+  specific setup, entry zone, and key levels.
+
+15M = entry timing. Used to confirm the entry.
+  Ideal entry: 15M trend aligns with 1H and 4H.
+  15M MACD bullish cross on a pullback = ideal long entry.
+  15M MACD bearish cross on a bounce = ideal short entry.
+
+CONFLUENCE BONUS RULE:
+If all three timeframes show the same trend direction,
+add 1 extra point to confluence score (can exceed 8/8).
+Note this as TIMEFRAME ALIGNMENT in the catalyst.
+
+PATTERN RULES:
+You receive detected candlestick patterns with their
+timeframe and significance.
+HIGH significance pattern on 4H = very strong signal,
+  weight it as 1 full confluence point.
+HIGH significance pattern on 1H = strong signal,
+  include in entry timing recommendation.
+HIGH significance pattern on 15M = entry confirmation,
+  mention in entryTiming field specifically.
+If a bearish pattern exists on any timeframe against
+your bullish bias, explicitly mention it in RISK field.
+
 ENTRY TYPE — classify the entry quality:
 - IDEAL:        conditions are perfect right now. For LONG: price pulling back to EMA20 with RSI 45-55 and macdHistogram still positive. For SHORT: mirror.
 - AGGRESSIVE:   setup is forming, entry is early. Price above/below EMA20 on a fresh BULLISH_CROSS / BEARISH_CROSS in the last 2 candles.
@@ -117,6 +151,68 @@ JSON shape (every field required):
   "marketCondition": "TRENDING_UP" | "TRENDING_DOWN" | "RANGING" | "BREAKOUT_WATCH",
   "generatedAt": "ISO timestamp (we will overwrite this server-side)"
 }`
+
+// [SPRINT-4] Render the MULTI-TIMEFRAME ANALYSIS section of the
+// user message. The 4H / 15M sections each render only when that
+// timeframe's data is non-zero — `tf.ema20 === 0` is the signal
+// that the per-TF fetch failed (the route returns an empty bundle
+// in that case). Skipping the section gracefully keeps the prompt
+// honest: Claude is told to apply 4H trend filtering, but if the
+// 4H feed is down we don't pretend we have the data.
+function buildMultiTimeframeSection(body: AnalysisRequest): string {
+  const lines: string[] = ['=== MULTI-TIMEFRAME ANALYSIS ===']
+
+  // 4H ─ macro trend context. The most important TF for direction.
+  if (body.tf4h.ema20 !== 0) {
+    lines.push(
+      '4H Timeframe:',
+      `  Trend: ${body.tf4h.trend}`,
+      `  RSI: ${body.tf4h.rsi.toFixed(1)} — ${body.tf4h.rsiZone}`,
+      `  MACD Histogram: ${body.tf4h.macdHistogram.toFixed(3)}`,
+      `  MACD Cross: ${body.tf4h.macdCross}`,
+      `  Price vs EMA20: ${body.tf4h.priceVsEma20}`,
+      `  EMA20: $${body.tf4h.ema20.toFixed(2)}`,
+      `  EMA50: $${body.tf4h.ema50.toFixed(2)}`,
+      ''
+    )
+  } else {
+    lines.push('4H Timeframe: data unavailable (skip 4H trend filter)', '')
+  }
+
+  // 15M ─ entry timing. Skip if the per-TF bundle is empty.
+  if (body.tf15m.ema20 !== 0) {
+    lines.push(
+      '15M Timeframe (entry timing):',
+      `  Trend: ${body.tf15m.trend}`,
+      `  RSI: ${body.tf15m.rsi.toFixed(1)} — ${body.tf15m.rsiZone}`,
+      `  MACD Histogram: ${body.tf15m.macdHistogram.toFixed(3)}`,
+      `  MACD Cross: ${body.tf15m.macdCross}`,
+      `  Price vs EMA20: ${body.tf15m.priceVsEma20}`,
+      `  EMA20: $${body.tf15m.ema20.toFixed(2)}`
+    )
+  } else {
+    lines.push('15M Timeframe: data unavailable (skip 15M entry confirmation)')
+  }
+
+  return lines.join('\n')
+}
+
+// [SPRINT-4] Render the DETECTED PATTERNS section. Always emits
+// a header so the prompt structure is consistent; falls back to
+// a single explanatory line when the array is empty (per spec).
+function buildPatternsSection(body: AnalysisRequest): string {
+  const lines: string[] = ['=== DETECTED PATTERNS ===']
+  if (body.detectedPatterns.length === 0) {
+    lines.push('No significant patterns detected on any timeframe.')
+    return lines.join('\n')
+  }
+  for (const p of body.detectedPatterns) {
+    lines.push(
+      `${p.timeframe} ${p.pattern} — ${p.direction} — ${p.significance} — ${p.description}`
+    )
+  }
+  return lines.join('\n')
+}
 
 // Detect a missing or placeholder ANTHROPIC_API_KEY. Treats
 // "your_key_here" (the default in .env.example) and empty values
@@ -421,6 +517,10 @@ Neutral:         ${body.newsNeutralCount}
 
 Top Headlines:
 ${body.topHeadlines.map((n: string, i: number) => `${i + 1}. ${n}`).join('\n')}
+
+${buildMultiTimeframeSection(body)}
+
+${buildPatternsSection(body)}
 
 === TASK ===
 Score each of the 8 confluence signals as BULLISH, BEARISH, or NEUTRAL.

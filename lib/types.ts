@@ -400,6 +400,45 @@ export interface AnalysisRequest {
   newsBearishCount: number
   newsNeutralCount: number
   topHeadlines: string[]
+
+  // [SPRINT-4] Multi-timeframe context. Compact scalar reads from
+  // the 15M and 4H bundles in TechnicalsResponse. Sent on every
+  // analyze request so Claude can apply the multi-TF playbook
+  // (4H = trend filter, 1H = setup, 15M = entry timing). String
+  // fields are kept loose (`string`) rather than the strong unions
+  // because the route emits the values verbatim from the
+  // per-TF bundle, which uses plain strings.
+  tf15m: {
+    trend: string
+    rsi: number
+    rsiZone: string
+    macdHistogram: number
+    macdCross: string
+    ema20: number
+    ema50: number
+    priceVsEma20: string
+  }
+  tf4h: {
+    trend: string
+    rsi: number
+    rsiZone: string
+    macdHistogram: number
+    macdCross: string
+    ema20: number
+    ema50: number
+    priceVsEma20: string
+  }
+
+  // [SPRINT-4] Detected candlestick + structure patterns flowing
+  // from the server's pattern detector. Empty array when no
+  // patterns fire; Claude's prompt explicitly handles that case.
+  detectedPatterns: {
+    pattern: string
+    timeframe: string
+    direction: string
+    significance: string
+    description: string
+  }[]
 }
 
 // ─────────────────────────────────────────────────────────────────
