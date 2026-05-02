@@ -39,6 +39,7 @@ import {
   displaySignalShort,
   T,
 } from '@/lib/copy'
+import { displaySetupName } from '@/lib/setups'
 import { getCurrentSession } from '@/lib/session'
 import type {
   AnalysisRequest,
@@ -1248,66 +1249,116 @@ export default function AnalysisPanel({
             marginBottom: '8px',
           }}
         >
-          <Tooltip
-            position="left"
-            content="Score de confluence — nombre de signaux alignés sur 8 (tendance, momentum, MACD, DXY, US10Y, session, actus, calendrier). Le copilote ne recommande LONG ou SHORT que si au moins 5 signaux convergent. En dessous de 5 → FLAT, attendre."
-          >
-            <span
-              style={{
-                color: '#888888',
-                fontSize: '9px',
-                textTransform: 'uppercase',
-                letterSpacing: '0.12em',
-              }}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Tooltip
+              position="left"
+              content="Score de confluence pondéré — chaque signal contribue selon son poids (tendance et macro dominent ; news et calendrier sous-pondérés). Affichage 0-10. Le copilote recommande LONG/SHORT quand le côté dominant pèse au moins 5,0."
             >
-              CONFLUENCE
-            </span>
-          </Tooltip>
+              <span
+                style={{
+                  color: '#888888',
+                  fontSize: '9px',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.12em',
+                }}
+              >
+                CONFLUENCE
+              </span>
+            </Tooltip>
+            {/* [PHASE-2] Setup chip — only renders when a named
+                setup matched. Inline next to the CONFLUENCE label
+                so the trader scans both at the same eye line. */}
+            {!showSkeleton && !showError && data?.detectedSetup ? (
+              <Tooltip
+                position="bottom"
+                content="Setup nommé détecté — pattern récurrent à haute probabilité. La détection ouvre la voie aux statistiques par setup et aux entrées plus précises dans les phases suivantes."
+              >
+                <span
+                  style={{
+                    color: '#60a5fa',
+                    background: '#0a1420',
+                    border: '1px solid #1a2a3a',
+                    fontSize: '8px',
+                    padding: '1px 5px',
+                    letterSpacing: '0.08em',
+                    fontFamily: 'var(--font-sans)',
+                  }}
+                >
+                  {displaySetupName(data.detectedSetup)}
+                </span>
+              </Tooltip>
+            ) : null}
+          </div>
           {showSkeleton ? (
-            <Skeleton width={40} height={12} />
+            <Skeleton width={48} height={12} />
           ) : data && !showError ? (
-            <span
-              style={{
-                color: confluenceColor(data.confluenceScore),
-                fontSize: '12px',
-                fontWeight: 500,
-              }}
-            >
-              {data.confluenceScore}/{data.confluenceTotal}
-            </span>
+            (() => {
+              // [PHASE-2] Prefer the weighted score when present.
+              // Old records that pre-date this field fall back to
+              // the legacy "N/8" integer display.
+              const wc = data.weightedConfluence
+              const display = wc
+                ? `${wc.score.toFixed(1)}/${wc.max.toFixed(0)}`
+                : `${data.confluenceScore}/${data.confluenceTotal}`
+              // Palette tracks the dominant direction (weighted
+              // when available, bias when not) — green/red/amber
+              // matches the rest of the card.
+              const dom = wc?.dominant ?? data.bias
+              const color =
+                dom === 'BULLISH'
+                  ? '#4ade80'
+                  : dom === 'BEARISH'
+                    ? '#f87171'
+                    : '#fbbf24'
+              return (
+                <span
+                  style={{ color, fontSize: '12px', fontWeight: 500 }}
+                >
+                  {display}
+                </span>
+              )
+            })()
           ) : (
             <span style={{ color: '#666666', fontSize: '12px' }}>——</span>
           )}
         </div>
 
-        {/* 8-block score bar. */}
+        {/* [PHASE-2] Score bar. 10 cells when weighted score is
+            present (one per integer point of the weighted total),
+            8 cells for legacy records — fills proportionally to
+            the dominant side's score. */}
         <div style={{ display: 'flex', gap: '3px' }}>
-          {Array.from({ length: 8 }).map((_, i) => {
-            // Filled if i < confluenceScore. Color by bias.
-            const filled =
-              !showSkeleton && !showError && data
-                ? i < data.confluenceScore
-                : false
-            const filledColor = data
-              ? data.bias === 'BULLISH'
+          {(() => {
+            const wc = data?.weightedConfluence
+            const cells = wc ? 10 : 8
+            const score = wc ? wc.score : data?.confluenceScore ?? 0
+            const dom = wc?.dominant ?? data?.bias
+            const filledColor =
+              dom === 'BULLISH'
                 ? '#4ade80'
-                : data.bias === 'BEARISH'
+                : dom === 'BEARISH'
                   ? '#f87171'
                   : '#fbbf24'
-              : '#1e1e1e'
-            return (
-              <div
-                key={i}
-                style={{
-                  flex: 1,
-                  height: '4px',
-                  borderRadius: '1px',
-                  background: filled ? filledColor : '#1e1e1e',
-                  border: filled ? 'none' : '1px solid #2a2a2a',
-                }}
-              />
-            )
-          })}
+            return Array.from({ length: cells }).map((_, i) => {
+              // Use the integer floor of the score so a 7.4 fills
+              // 7 cells; the 8th-cell glow is reserved for an
+              // 8.0+ "very strong" signal in a future revision.
+              const filled =
+                !showSkeleton && !showError && data ? i < Math.floor(score) : false
+              return (
+                <div
+                  key={i}
+                  style={{
+                    flex: 1,
+                    height: '4px',
+                    borderRadius: '1px',
+                    background: filled ? filledColor : '#1e1e1e',
+                    border: filled ? 'none' : '1px solid #2a2a2a',
+                  }}
+                />
+              )
+            })
+          })()}
         </div>
 
         {/* 8-signal breakdown grid. */}

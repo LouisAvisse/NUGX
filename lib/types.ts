@@ -356,7 +356,43 @@ export interface AnalysisResult {
   entryType: EntryType
   invalidationLevel: string  // price string — thesis breaks beyond this
   marketCondition: MarketCondition
+
+  // [PHASE-2] Weighted confluence — granular score 0..max derived
+  // from the same 8 signals as confluenceScore but with per-signal
+  // weights (trend dominates, calendar/news under-weighted).
+  // Server-computed via lib/scoring.ts; legacy confluenceScore is
+  // still populated for backward compatibility with stored history
+  // records that pre-date this field.
+  weightedConfluence?: WeightedConfluenceSummary
+
+  // [PHASE-2] Detected named setup. null when no detector scored
+  // above the confidence threshold; the analysis remains valid in
+  // that case and the UI just hides the setup chip. See lib/setups.ts.
+  detectedSetup?: SetupName | null
 }
+
+// [PHASE-2] Trimmed view of the WeightedConfluence object from
+// lib/scoring.ts — kept on AnalysisResult so stored history
+// records carry the same payload. Mirrors the runtime shape but
+// without re-importing the lib/scoring module from types.ts.
+export interface WeightedConfluenceSummary {
+  score: number              // 0..max, rounded to 1 decimal
+  max: number                // total of all weights, currently 10.0
+  dominant: Bias             // direction that won the weighted vote
+  bullishWeight: number      // raw bullish total
+  bearishWeight: number      // raw bearish total
+}
+
+// [PHASE-2] Closed set of named setups the detector knows about.
+// Adding a new setup here also requires updating DETECTORS in
+// lib/setups.ts and displaySetupName().
+export type SetupName =
+  | 'LONDON_FALSE_BREAK'
+  | 'LONDON_CONTINUATION'
+  | 'NY_OVERLAP_TREND'
+  | 'FOMC_FADE'
+  | 'ASIAN_RANGE_BREAKOUT'
+  | 'EMA20_PULLBACK'
 
 // Inputs Claude needs to produce an AnalysisResult. The dashboard
 // assembles this from current price + technicals + macro signals +
@@ -671,6 +707,13 @@ export interface AnalysisHistoryRecord {
   target: string
   invalidationLevel: string
   riskReward: string
+
+  // [PHASE-2] Setup name + weighted score copied from the
+  // AnalysisResult so MEMORY tab can group by setup and Phase 6
+  // (rehearsal) can compute "last N similar setups" without
+  // re-running detection.
+  detectedSetup?: SetupName | null
+  weightedConfluence?: WeightedConfluenceSummary
 
   // [LEGACY] Point-in-time outcome tracking. Kept on existing
   // records for backward compatibility but no longer written for

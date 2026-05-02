@@ -211,9 +211,14 @@ export function saveAnalysis(
     target: result.target,
     invalidationLevel: result.invalidationLevel,
     riskReward: result.riskReward,
-    // Outcome fields all undefined initially — the follow-up
-    // checker fills priceAt2H / outcome2H at +2H, then
-    // priceAt4H / outcome4H at +4H.
+    // [PHASE-2] Carry the named setup + weighted score onto the
+    // history record so future phases can compute per-setup
+    // statistics. Both are optional — older records have neither.
+    detectedSetup: result.detectedSetup ?? null,
+    weightedConfluence: result.weightedConfluence,
+    // Outcome fields all undefined initially — the path-replay
+    // checker fills hitOutcome / hitAt / pathMaxFavorable /
+    // pathMaxAdverse once the +4H window passes.
   }
   const all = readAll()
   all.unshift(record)

@@ -16,6 +16,8 @@
 import { NextResponse } from 'next/server'
 import Anthropic from '@anthropic-ai/sdk'
 import type { AnalysisRequest, AnalysisResult } from '@/lib/types'
+import { computeWeightedConfluence } from '@/lib/scoring'
+import { detectSetup, displaySetupName } from '@/lib/setups'
 
 const client = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -672,7 +674,13 @@ export async function POST(request: Request) {
   // card fully populated during local dev / demo without a real
   // Anthropic account.
   if (!hasRealKey(process.env.ANTHROPIC_API_KEY)) {
-    return NextResponse.json(buildMockAnalysis(body))
+    const mock = buildMockAnalysis(body)
+    // [PHASE-2] Same enrichment path as the live branch so the
+    // mock card renders the weighted score + setup chip too.
+    mock.weightedConfluence = computeWeightedConfluence(mock.signals)
+    const m = detectSetup(body)
+    mock.detectedSetup = m ? m.name : null
+    return NextResponse.json(mock)
   }
 
   try {
@@ -793,6 +801,16 @@ Count the totals. Apply the entry rules. Deliver the JSON exactly per the schema
       parsed.recommendation = 'FLAT'
       parsed.entryType = 'WAIT'
     }
+
+    // [PHASE-2] Compute the weighted confluence + detect named
+    // setup AFTER Claude responds so the model still produces
+    // the integer confluenceScore (legacy field consumed by
+    // stored history records). Both new fields are additive —
+    // the UI shows them when present, falls back gracefully when
+    // absent (older records, FALLBACK responses).
+    parsed.weightedConfluence = computeWeightedConfluence(parsed.signals)
+    const match = detectSetup(body)
+    parsed.detectedSetup = match ? match.name : null
 
     return NextResponse.json(parsed)
   } catch (err) {
