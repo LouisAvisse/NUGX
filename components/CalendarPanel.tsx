@@ -64,6 +64,166 @@ function formatCountdownChip(e: EconomicEvent): {
   }
 }
 
+// Format an event's ISO date as a human-readable UTC line for
+// the title tooltip. Example output:
+//   "Mer. 30 avr. 12:30 UTC"
+// Compact, locale-aware, unambiguous.
+function formatEventWhen(iso: string): string {
+  const d = new Date(iso)
+  const date = d.toLocaleDateString('fr-FR', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    timeZone: 'UTC',
+  })
+  const time = d.toLocaleTimeString('fr-FR', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    timeZone: 'UTC',
+  })
+  return `${date} ${time} UTC`
+}
+
+// Build the tooltip body for an event row. The displayed title
+// is often a generic data label ("ISM Manufacturing PMI") that
+// loses context — e.g. when the same hour also has a Trump
+// speech, or when forecast/previous numbers materially change
+// the read. The tooltip surfaces ALL of it: full untruncated
+// title, exact UTC time, impact tier, forecast vs previous so
+// the trader doesn't have to flip to ForexFactory to disambiguate.
+function buildEventTooltip(e: EconomicEvent): string {
+  const lines: string[] = []
+  lines.push(e.title)
+  lines.push(`${e.country || '—'}  ·  ${formatEventWhen(e.date)}`)
+  const impactFr =
+    e.impact === 'HIGH'
+      ? 'Impact ÉLEVÉ'
+      : e.impact === 'MEDIUM'
+        ? 'Impact MOYEN'
+        : 'Impact FAIBLE'
+  lines.push(impactFr)
+  // Forecast / previous on a single line if either exists. The
+  // pair gives the trader the surprise direction at a glance.
+  if (e.forecast !== '—' || e.previous !== '—') {
+    lines.push(`Prévi. : ${e.forecast}    Préc. : ${e.previous}`)
+  }
+  return lines.join('\n')
+}
+
+// Render one event row. Extracted from the main render so the
+// "weekend gap" branch can append the same rows under a graceful
+// explainer header without duplicating the JSX.
+function renderEventRow(e: EconomicEvent, i: number): React.ReactNode {
+  const chip = formatCountdownChip(e)
+  const titleColor = e.isUpcoming ? '#b0b0b0' : '#888888'
+  const tooltip = buildEventTooltip(e)
+  return (
+    <div key={`${e.title}-${e.date}-${i}`}>
+      <div
+        style={{
+          padding: '6px 12px',
+          borderBottom: '1px solid #1a1a1a',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'flex-start',
+          gap: '8px',
+        }}
+      >
+        <div style={{ flex: 1, minWidth: 0 }}>
+          {/* Title wrapped in a Tooltip so a generic event
+              label ("ISM Manufacturing PMI") can be expanded
+              with full context (UTC time, forecast/previous,
+              impact tier). The displayed text wraps within the
+              maxWidth — the tooltip is for the trader who wants
+              the full picture without leaving the dashboard. */}
+          <Tooltip position="right" content={tooltip}>
+            <span
+              style={{
+                color: titleColor,
+                fontSize: '9px',
+                lineHeight: 1.4,
+                maxWidth: '170px',
+                display: 'inline-block',
+              }}
+            >
+              {e.title}
+            </span>
+          </Tooltip>
+          {e.country && (
+            <span
+              style={{
+                background: '#161616',
+                border: '1px solid #222222',
+                color: '#555555',
+                fontSize: '8px',
+                padding: '1px 4px',
+                marginTop: '3px',
+                display: 'inline-block',
+              }}
+            >
+              {e.country}
+            </span>
+          )}
+        </div>
+        <div
+          style={{
+            textAlign: 'right',
+            flexShrink: 0,
+          }}
+        >
+          <div
+            style={{
+              color: impactColor(e.impact),
+              fontSize: '8px',
+              letterSpacing: '0.08em',
+            }}
+          >
+            {e.impact}
+          </div>
+          <div
+            className={chip.pulse ? 'pulse' : ''}
+            style={{
+              color: chip.color,
+              fontSize: '8px',
+              marginTop: '2px',
+            }}
+          >
+            {chip.text}
+          </div>
+        </div>
+      </div>
+      {(e.forecast !== '—' || e.previous !== '—') && (
+        <div
+          style={{
+            padding: '2px 12px 6px 12px',
+            display: 'flex',
+            gap: '12px',
+            borderBottom: '1px solid #1a1a1a',
+          }}
+        >
+          <Tooltip
+            position="right"
+            content="Prévision (forecast) du marché pour cette donnée. À comparer avec la valeur réelle (sortie au moment de l'événement) — un écart matériel déclenche une réaction sur l'or."
+          >
+            <span style={{ color: '#888888', fontSize: '8px' }}>
+              F : {e.forecast}
+            </span>
+          </Tooltip>
+          <Tooltip
+            position="right"
+            content="Précédent (previous release) — la dernière valeur publiée pour cette même donnée. Donne le baseline pour interpréter la nouvelle sortie."
+          >
+            <span style={{ color: '#666666', fontSize: '8px' }}>
+              P : {e.previous}
+            </span>
+          </Tooltip>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // Two-bar shimmer skeleton row used while data loads.
 function SkeletonRow() {
   return (
@@ -136,99 +296,55 @@ export default function CalendarPanel() {
         {T.calendarEmpty}
       </div>
     )
-  } else {
-    body = events.slice(0, EVENT_DISPLAY).map((e, i) => {
-      const chip = formatCountdownChip(e)
-      const titleColor = e.isUpcoming ? '#b0b0b0' : '#888888'
-      return (
-        <div key={`${e.title}-${e.date}-${i}`}>
-          {/* Top row — title (+ country badge) on the left,
-              impact + countdown chip on the right. */}
-          <div
-            style={{
-              padding: '6px 12px',
-              borderBottom: '1px solid #1a1a1a',
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'flex-start',
-              gap: '8px',
-            }}
-          >
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div
-                style={{
-                  color: titleColor,
-                  fontSize: '9px',
-                  lineHeight: 1.4,
-                  maxWidth: '170px',
-                }}
-              >
-                {e.title}
-              </div>
-              {e.country && (
-                <span
-                  style={{
-                    background: '#161616',
-                    border: '1px solid #222222',
-                    color: '#555555',
-                    fontSize: '8px',
-                    padding: '1px 4px',
-                    marginTop: '3px',
-                    display: 'inline-block',
-                  }}
-                >
-                  {e.country}
-                </span>
-              )}
-            </div>
-            <div
-              style={{
-                textAlign: 'right',
-                flexShrink: 0,
-              }}
-            >
-              <div
-                style={{
-                  color: impactColor(e.impact),
-                  fontSize: '8px',
-                  letterSpacing: '0.08em',
-                }}
-              >
-                {e.impact}
-              </div>
-              <div
-                className={chip.pulse ? 'pulse' : ''}
-                style={{
-                  color: chip.color,
-                  fontSize: '8px',
-                  marginTop: '2px',
-                }}
-              >
-                {chip.text}
-              </div>
-            </div>
-          </div>
-          {/* Forecast / previous row — only when we have either. */}
-          {(e.forecast !== '—' || e.previous !== '—') && (
-            <div
-              style={{
-                padding: '2px 12px 6px 12px',
-                display: 'flex',
-                gap: '12px',
-                borderBottom: '1px solid #1a1a1a',
-              }}
-            >
-              <span style={{ color: '#888888', fontSize: '8px' }}>
-                F: {e.forecast}
-              </span>
-              <span style={{ color: '#666666', fontSize: '8px' }}>
-                P: {e.previous}
-              </span>
-            </div>
-          )}
+  } else if (events.every((e) => !e.isUpcoming)) {
+    // [Weekend gap] ForexFactory ships only the current week's
+    // JSON; on a Saturday before the Sunday-evening rollover all
+    // events are past. Render a graceful explainer instead of
+    // a wall of "passé" chips so the trader knows the panel
+    // isn't broken.
+    body = (
+      <div
+        style={{
+          padding: '12px 14px',
+          color: '#888888',
+          fontSize: '10px',
+          lineHeight: 1.5,
+        }}
+      >
+        <div style={{ color: '#b0b0b0', fontSize: '10px', marginBottom: '4px' }}>
+          Aucun événement à venir cette semaine.
         </div>
-      )
-    })
+        <div style={{ color: '#666666', fontSize: '9px' }}>
+          Le calendrier reprend son cycle dimanche soir UTC, à la
+          réouverture des marchés. Les derniers événements de la
+          semaine écoulée restent affichés ci-dessous pour mémoire.
+        </div>
+        <div
+          style={{
+            marginTop: '10px',
+            paddingTop: '8px',
+            borderTop: '1px solid #1a1a1a',
+            color: '#444444',
+            fontSize: '8px',
+            letterSpacing: '0.1em',
+            textTransform: 'uppercase',
+          }}
+        >
+          Semaine écoulée
+        </div>
+      </div>
+    )
+    // Fall through to the normal events.map() below by
+    // appending past events under the explainer — wrap both in
+    // a fragment so they render in sequence.
+    body = (
+      <>
+        {body}
+        {events.slice(0, EVENT_DISPLAY).map((e, i) => renderEventRow(e, i))}
+      </>
+    )
+  } else {
+    body = events.slice(0, EVENT_DISPLAY).map((e, i) => renderEventRow(e, i))
   }
 
   return (

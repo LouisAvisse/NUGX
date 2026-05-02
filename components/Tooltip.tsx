@@ -144,7 +144,12 @@ export default function Tooltip({
             letterSpacing: '0.01em',
             borderRadius: '3px',
             boxShadow: '0 2px 8px rgba(0, 0, 0, 0.4)',
-            whiteSpace: 'normal',
+            // pre-line preserves explicit \n line breaks in
+            // content (e.g. multi-line tooltips that show full
+            // headline + source on separate lines) while still
+            // collapsing repeated whitespace and wrapping at the
+            // box edge.
+            whiteSpace: 'pre-line',
             wordBreak: 'normal',
             overflowWrap: 'anywhere',
           }}

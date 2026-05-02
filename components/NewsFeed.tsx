@@ -444,19 +444,37 @@ export default function NewsFeed() {
               ●
             </span>
             <span style={impactBadgeStyle(a.impact)}>{a.impact}</span>
-            <span
-              style={{
-                flex: 1,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-                color: isHovered ? '#e5e5e5' : '#b0b0b0',
-                fontSize: '10px',
-                lineHeight: 1.4,
-              }}
+            {/* The displayed headline truncates with ellipsis to
+                keep the row at one line, but the full title +
+                source ride along in a tooltip so the trader can
+                see "Trump speech at ISM event" rather than just
+                a generic "ISM event…" — the truncated form
+                otherwise loses the political dimension that
+                changes the trade interpretation. */}
+            <Tooltip
+              position="left"
+              content={`${a.title}\n— ${a.source}`}
             >
-              {a.title}
-            </span>
+              <span
+                style={{
+                  flex: 1,
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  whiteSpace: 'nowrap',
+                  color: isHovered ? '#e5e5e5' : '#b0b0b0',
+                  fontSize: '10px',
+                  lineHeight: 1.4,
+                  // Tooltip wrapper is inline-flex; ensure the
+                  // span itself can flex to fill horizontally so
+                  // the ellipsis truncation point is correct.
+                  display: 'inline-block',
+                  width: '100%',
+                  minWidth: 0,
+                }}
+              >
+                {a.title}
+              </span>
+            </Tooltip>
             <span
               style={{
                 color: '#666666',

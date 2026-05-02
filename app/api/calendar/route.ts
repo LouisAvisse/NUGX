@@ -98,25 +98,32 @@ const CLEAR_TO_TRADE_WINDOW_MIN = 45
 const PLAN_EXIT_WINDOW_MIN = 120
 
 // Cap returned events list. The panel renders ~5-6 visibly
-// before scrolling, 10 is plenty.
-const EVENT_CAP = 10
+// before scrolling, 12 leaves room for the trader to scroll a
+// touch beyond the fold without overwhelming the column.
+const EVENT_CAP = 12
+
+// ForexFactory only publishes a single weekly JSON file —
+// `ff_calendar_thisweek.json`. Sibling URLs (nextweek, thismonth,
+// lastweek) all return 404. Verified live with curl.
+//
+// Practical implication: the file rolls Sunday ~17:00 ET to
+// contain the new Mon-Sat trading week. On a Saturday before
+// rollover the dashboard sees an "all events past" state. We
+// detect that in the panel and show a graceful weekend message
+// rather than scrolling past stale chips.
+const FF_THIS_WEEK_URL = 'https://nfs.faireconomy.media/ff_calendar_thisweek.json'
 
 export async function GET() {
   try {
-    const res = await fetch(
-      'https://nfs.faireconomy.media/ff_calendar_thisweek.json',
-      {
-        headers: { Accept: 'application/json' },
-        // Cache 1 hour at the Next data layer — the underlying
-        // weekly feed updates infrequently and the hook is
-        // already polling every minute on the client to keep
-        // minutesUntil fresh.
-        next: { revalidate: 3600 },
-      }
-    )
-
+    const res = await fetch(FF_THIS_WEEK_URL, {
+      headers: { Accept: 'application/json' },
+      // Cache 1h at the Next data layer — the underlying weekly
+      // feed updates infrequently and the hook is already
+      // polling every minute on the client to keep minutesUntil
+      // fresh.
+      next: { revalidate: 3600 },
+    })
     if (!res.ok) throw new Error(`Calendar fetch failed: ${res.status}`)
-
     const raw = (await res.json()) as unknown
     if (!Array.isArray(raw)) throw new Error('Unexpected calendar shape')
 
