@@ -33,6 +33,12 @@ import { useTechnicals } from '@/lib/hooks/useTechnicals'
 import { useCalendar } from '@/lib/hooks/useCalendar'
 import { useHistory } from '@/lib/hooks/useHistory'
 import { computeCalibration } from '@/lib/calibration'
+import {
+  computeCalibrationLoop,
+  calibrationProvenance,
+  type CalibrationResult,
+} from '@/lib/calibrationLoop'
+import { computeWeightedConfluence } from '@/lib/scoring'
 import { computeRehearsal, type RehearsalStats } from '@/lib/rehearsal'
 import { formatDateTime, parsePrice } from '@/lib/utils'
 import {
@@ -954,6 +960,29 @@ export default function AnalysisPanel({
     setRehearsal(computeRehearsal(data, session))
   }, [data, history.history])
 
+  // [PHASE-10] Calibration loop — recompute personalized weights
+  // from the trader's outcome history every time history mutates.
+  // While the sample is small the result is { calibrated: false,
+  // weights: DEFAULT_WEIGHTS } so the score block renders
+  // identically to Phase 2. Once the threshold is crossed, the
+  // weighted score is RECOMPUTED on the client with the derived
+  // weights for display only — server-side history records keep
+  // the canonical default-weighted score so calibration stays a
+  // pure function over deterministic inputs.
+  const [calibrationLoop, setCalibrationLoop] = useState<CalibrationResult | null>(
+    null
+  )
+  useEffect(() => {
+    setCalibrationLoop(computeCalibrationLoop())
+  }, [history.history])
+  const calibratedWC =
+    data && calibrationLoop && calibrationLoop.calibrated
+      ? computeWeightedConfluence(data.signals, calibrationLoop.weights)
+      : null
+  const calibProvenance = calibrationLoop
+    ? calibrationProvenance(calibrationLoop)
+    : null
+
   // [SPRINT-5] Persist each successful analysis to localStorage
   // history. Keyed off generatedAt so we save once per unique
   // run; useHistory dedupes downstream too (a duplicate save with
@@ -1651,16 +1680,14 @@ export default function AnalysisPanel({
             <Skeleton width={48} height={12} />
           ) : data && !showError ? (
             (() => {
-              // [PHASE-2] Prefer the weighted score when present.
-              // Old records that pre-date this field fall back to
-              // the legacy "N/8" integer display.
-              const wc = data.weightedConfluence
+              // [PHASE-2/10] Prefer the calibrated weighted score
+              // when calibrationLoop is active; fall back to the
+              // server-computed default-weighted score; finally
+              // fall back to the legacy "N/8" for old records.
+              const wc = calibratedWC ?? data.weightedConfluence
               const display = wc
                 ? `${wc.score.toFixed(1)}/${wc.max.toFixed(0)}`
                 : `${data.confluenceScore}/${data.confluenceTotal}`
-              // Palette tracks the dominant direction (weighted
-              // when available, bias when not) — green/red/amber
-              // matches the rest of the card.
               const dom = wc?.dominant ?? data.bias
               const color =
                 dom === 'BULLISH'
@@ -1680,6 +1707,30 @@ export default function AnalysisPanel({
             <span style={{ color: '#666666', fontSize: '12px' }}>——</span>
           )}
         </div>
+
+        {/* [PHASE-10] Calibration provenance line — shows whether
+            the displayed weighted score was computed with the
+            trader's personally-calibrated weights or with system
+            defaults. Hidden until calibrationLoop has produced
+            a meaningful state. */}
+        {!showSkeleton && !showError && calibProvenance ? (
+          <Tooltip
+            position="left"
+            content="Le copilote ajuste automatiquement les pondérations des 8 signaux à votre historique personnel, dès que vous avez 30 résultats résolus. Avant ce seuil, les pondérations par défaut s'appliquent — l'apprentissage commence dès la première analyse."
+          >
+            <div
+              style={{
+                marginTop: '4px',
+                color: '#555555',
+                fontSize: '8px',
+                letterSpacing: '0.06em',
+                fontStyle: 'italic',
+              }}
+            >
+              {calibProvenance}
+            </div>
+          </Tooltip>
+        ) : null}
 
         {/* [PHASE-2] Score bar. 10 cells when weighted score is
             present (one per integer point of the weighted total),

@@ -786,6 +786,13 @@ export interface AnalysisHistoryRecord {
   detectedSetup?: SetupName | null
   weightedConfluence?: WeightedConfluenceSummary
 
+  // [PHASE-10] Per-signal breakdown captured at analysis time.
+  // Required by the calibration loop to compute per-signal lift
+  // (how often a BULLISH trend signal aligned with HIT_TARGET on
+  // LONG trades vs the baseline). Optional so older records
+  // without it still validate; calibration ignores them.
+  signals?: SignalBreakdown
+
   // [LEGACY] Point-in-time outcome tracking. Kept on existing
   // records for backward compatibility but no longer written for
   // new records — the path-based replay below replaces it. See

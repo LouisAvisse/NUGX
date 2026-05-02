@@ -216,6 +216,11 @@ export function saveAnalysis(
     // statistics. Both are optional — older records have neither.
     detectedSetup: result.detectedSetup ?? null,
     weightedConfluence: result.weightedConfluence,
+    // [PHASE-10] Persist the SignalBreakdown so the calibration
+    // loop can compute per-signal lift later. Without this each
+    // calibration pass would have to re-run inference from raw
+    // technicals, which we don't store.
+    signals: result.signals,
     // Outcome fields all undefined initially — the path-replay
     // checker fills hitOutcome / hitAt / pathMaxFavorable /
     // pathMaxAdverse once the +4H window passes.
