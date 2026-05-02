@@ -9,6 +9,17 @@
 // Returned by /api/price; consumed by useGoldPrice + PriceBar.
 // ─────────────────────────────────────────────────────────────────
 
+// Provenance discriminator on every API response. Lets the UI
+// surface a "DONNÉES SIMULÉES" badge when ANY data source falls
+// back to mock/cached/partial data instead of silently rendering
+// fake numbers as if they were live (the F-90 / security-M4
+// concern). 'live' = real upstream OK; 'partial' = some fields
+// computed from a fallback source (e.g. price spot from gold-api
+// but OHLC missing); 'mock' = hardcoded / snapshot-derived data.
+export interface ResponseMeta {
+  source: 'live' | 'partial' | 'mock'
+}
+
 // One snapshot of the gold market: latest tick + daily OHLC + the
 // previous close. `change` and `changePct` are vs. `prevClose`.
 // `timestamp` is ms since epoch (matches Date.now()).
@@ -21,6 +32,10 @@ export interface GoldPrice {
   open: number        // session open (USD)
   prevClose: number   // previous session close (USD)
   timestamp: number   // ms epoch — when this snapshot was taken
+  // Optional provenance — present from the route, may be missing
+  // on legacy cached responses. UI defaults to 'live' display when
+  // absent.
+  meta?: ResponseMeta
 }
 
 // ─────────────────────────────────────────────────────────────────
