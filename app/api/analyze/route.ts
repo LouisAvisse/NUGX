@@ -90,6 +90,72 @@ HIGH significance pattern on 15M = entry confirmation,
 If a bearish pattern exists on any timeframe against
 your bullish bias, explicitly mention it in RISK field.
 
+SESSION-SPECIFIC PLAYBOOKS:
+Apply these rules based on the current session.
+They encode how gold actually behaves in each
+session based on institutional patterns.
+
+TOKYO SESSION (00:00-07:00 UTC):
+  Low volume, price often consolidates.
+  False breakouts are common — treat technical
+  signals with lower confidence.
+  Reduce confidence by one level (HIGH→MEDIUM,
+  MEDIUM→LOW) unless 7+ signals align.
+  Only trade clean breakouts from tight ranges.
+  Typical move size: 0.5-1x ATR.
+
+LONDON SESSION (07:00-12:00 UTC):
+  High volume, trends established here.
+  LONDON OPEN FALSE BREAK RULE: In the first
+  30 minutes of London session (07:00-07:30 UTC),
+  price frequently spikes in one direction before
+  reversing. If current UTC time is before 07:30,
+  note this in entryTiming and recommend waiting
+  for confirmation after 07:30.
+  After 07:30: trend continuation setups are
+  highly reliable. This is the best session for
+  EMA pullback entries.
+  Typical move size: 1-2x ATR.
+
+NY/LONDON OVERLAP (12:00-16:00 UTC):
+  Peak volume and volatility.
+  US economic data releases happen here (CPI,
+  NFP, FOMC). Always check calendar.
+  If clearToTrade is true: highest conviction
+  for directional moves. Take full position size.
+  If a trend is established from London:
+    Continuation in NY/London overlap is very
+    likely. Weight trend signals more heavily.
+  If trend is RANGING after London:
+    Expect choppy conditions. Reduce conviction.
+  Typical move size: 1.5-3x ATR.
+
+NEW YORK SESSION (16:00-21:00 UTC):
+  Volume declining after US close.
+  Late NY setups have lower follow-through.
+  Only take setups with 7+ confluence.
+  Be aware: less institutional participation
+  means technical levels are less reliable.
+  Typical move size: 0.5-1.5x ATR.
+
+OFF-HOURS (21:00-00:00 UTC):
+  Minimum volume. Spreads widen.
+  Recommendation should be FLAT in off-hours
+  unless confluence is 8/8 and a major catalyst
+  is driving the move.
+
+ALWAYS include the typical move size for current
+session in the holdTime field — express as a
+range based on ATR multiple.
+Example: ATR is $18.50, NY/London overlap typical
+is 1.5-3x ATR, so holdTime = '1-3 hours ($28-55
+expected range)'.
+
+When applying the London false break rule:
+  Set entryType to 'WAIT' if before 07:30 UTC.
+  Add to entryTiming: 'Wait for London false break
+  to resolve after 07:30 UTC before entering.'
+
 PERSONAL PERFORMANCE CONTEXT:
 You may receive the trader's personal performance
 history. If hasData is true, use it to calibrate
@@ -532,7 +598,16 @@ export async function POST(request: Request) {
     // model can't disambiguate them. Sections labeled the way
     // the system prompt's confluence rules reference them, so
     // Marcus has a 1:1 between input and the 8-signal scoring.
-    const userMessage = `GOLD (XAU/USD) MARKET SNAPSHOT — ${new Date().toUTCString()}
+    // [SPRINT-10] UTC time is exposed at the top of the message
+    // so Claude can apply the LONDON OPEN FALSE BREAK rule
+    // (entryType=WAIT before 07:30 UTC) and the session-specific
+    // playbooks without having to re-derive the time from the
+    // session string.
+    const nowUtc = new Date()
+    const userMessage = `GOLD (XAU/USD) MARKET SNAPSHOT — ${nowUtc.toUTCString()}
+Current UTC time: ${nowUtc.toUTCString()}
+Current UTC hour: ${nowUtc.getUTCHours()}
+Current UTC minute: ${nowUtc.getUTCMinutes()}
 
 === PRICE ACTION ===
 Current Price:   $${body.price.toFixed(2)}
