@@ -25,6 +25,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Tooltip from '@/components/Tooltip'
 import { useAnalysis } from '@/lib/hooks/useAnalysis'
+import { useEntryWatcher } from '@/lib/hooks/useEntryWatcher'
 import { useGoldPrice } from '@/lib/hooks/useGoldPrice'
 import { useSignals } from '@/lib/hooks/useSignals'
 import { useNews } from '@/lib/hooks/useNews'
@@ -789,10 +790,19 @@ export default function AnalysisPanel({
   const technicals = useTechnicals()
   const calendar = useCalendar()
   // [SPRINT-5] Persist every successful analysis to localStorage
-  // history; the hook also runs the +2H/+4H outcome checker in
-  // the background so we don't need to manage that here.
+  // history; the hook also runs the path-replay outcome checker
+  // in the background so we don't need to manage that here.
   const history = useHistory()
   const { data, loading, error, secondsUntilNext, trigger } = analysis
+
+  // [PHASE-4] Watch the live price against the analysis entry
+  // zone; fires a browser notification the moment price enters
+  // the zone in the expected direction. Reads goldPrice.data
+  // (already polled every 30s) so no new network traffic.
+  const watcher = useEntryWatcher(
+    data ?? null,
+    goldPrice.data?.price ?? null
+  )
 
   const [hoverBtn, setHoverBtn] = useState(false)
 
@@ -1126,6 +1136,68 @@ export default function AnalysisPanel({
               </span>
             </Tooltip>
           )}
+          {/* [PHASE-4] Watcher status — only renders when there's
+              an actionable analysis. Three states:
+                - armed:   light blue; price not yet in zone.
+                - fired:   green; price entered the zone, alert sent.
+                - default: grey link to enable notifications.
+              The button-style state lets the trader request
+              notification permission with a single click. */}
+          {data && data.recommendation !== 'FLAT' ? (
+            watcher.permission === 'granted' ? (
+              <Tooltip
+                position="bottom"
+                content={
+                  watcher.fired
+                    ? "Le prix est entré dans la zone d'entrée. Notification déclenchée."
+                    : watcher.armed
+                      ? "Le copilote surveille le prix en continu et déclenchera une notification dès qu'il entrera dans la zone d'entrée."
+                      : 'Surveillance suspendue (analyse incompatible ou prix indisponible).'
+                }
+              >
+                <span
+                  style={{
+                    color: watcher.fired
+                      ? '#4ade80'
+                      : watcher.armed
+                        ? '#60a5fa'
+                        : '#666666',
+                    fontSize: '8px',
+                    letterSpacing: '0.08em',
+                  }}
+                >
+                  {watcher.fired
+                    ? '✓ ZONE ATTEINTE'
+                    : watcher.armed
+                      ? '◉ EN SURVEILLANCE'
+                      : '○ EN ATTENTE'}
+                </span>
+              </Tooltip>
+            ) : watcher.permission === 'default' ? (
+              <Tooltip
+                position="bottom"
+                content="Activer les notifications du navigateur pour être alerté dès que le prix entre dans la zone d'entrée — sans avoir à surveiller le tableau de bord en continu."
+              >
+                <button
+                  type="button"
+                  onClick={() => void watcher.requestPermission()}
+                  style={{
+                    background: 'transparent',
+                    border: '1px solid #222222',
+                    borderRadius: '2px',
+                    color: '#888888',
+                    fontSize: '8px',
+                    letterSpacing: '0.08em',
+                    padding: '1px 6px',
+                    cursor: 'pointer',
+                    fontFamily: 'var(--font-mono)',
+                  }}
+                >
+                  ◉ ACTIVER ALERTES
+                </button>
+              </Tooltip>
+            ) : null
+          ) : null}
         </div>
         {countdownNode}
       </div>
