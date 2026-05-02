@@ -31,6 +31,7 @@ import { useNews } from '@/lib/hooks/useNews'
 import { useTechnicals } from '@/lib/hooks/useTechnicals'
 import { useCalendar } from '@/lib/hooks/useCalendar'
 import { useHistory } from '@/lib/hooks/useHistory'
+import { computeCalibration } from '@/lib/calibration'
 import { biasColor, formatDateTime } from '@/lib/utils'
 import { getCurrentSession } from '@/lib/session'
 import type {
@@ -38,6 +39,7 @@ import type {
   Bias,
   ChartLevels,
   Confidence,
+  ConfidenceCalibration,
   EntryType,
   MarketCondition,
   Recommendation,
@@ -436,6 +438,164 @@ function parseFirstNumber(s: string | undefined): number | undefined {
   return Number.isFinite(n) ? n : undefined
 }
 
+// [SPRINT-11] Calibration breakdown — three confidence-level
+// rows + an optional insight line below. Extracted out of the
+// main component to keep the JSX readable.
+function CalibrationRows({
+  calibration,
+}: {
+  calibration: ConfidenceCalibration
+}) {
+  // Per-level palette — same green/amber/red as the main
+  // confidence badge so the UI vocabulary stays consistent.
+  const rows: {
+    label: Confidence
+    accuracy: number | null
+    badge: { bg: string; fg: string }
+    count: number
+  }[] = [
+    {
+      label: 'HIGH',
+      accuracy: calibration.highConfidenceAccuracy,
+      badge: { bg: '#0a1a0a', fg: '#4ade80' },
+      count: 0,
+    },
+    {
+      label: 'MEDIUM',
+      accuracy: calibration.mediumConfidenceAccuracy,
+      badge: { bg: '#1a1500', fg: '#fbbf24' },
+      count: 0,
+    },
+    {
+      label: 'LOW',
+      accuracy: calibration.lowConfidenceAccuracy,
+      badge: { bg: '#1a0a0a', fg: '#f87171' },
+      count: 0,
+    },
+  ]
+
+  const allNull = rows.every((r) => r.accuracy === null)
+
+  return (
+    <>
+      {rows.map((row) => {
+        const fillColor =
+          row.accuracy === null
+            ? '#1e1e1e'
+            : row.accuracy >= 65
+              ? '#4ade80'
+              : row.accuracy >= 50
+                ? '#fbbf24'
+                : '#f87171'
+        return (
+          <div
+            key={row.label}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              marginBottom: '6px',
+            }}
+          >
+            <span
+              style={{
+                background: row.badge.bg,
+                color: row.badge.fg,
+                fontSize: '8px',
+                padding: '2px 6px',
+                width: '60px',
+                textAlign: 'center',
+                letterSpacing: '0.08em',
+              }}
+            >
+              {row.label}
+            </span>
+            <div
+              style={{
+                flex: 1,
+                height: '4px',
+                background: '#1e1e1e',
+                borderRadius: '1px',
+              }}
+            >
+              <div
+                style={{
+                  width: row.accuracy === null ? '0%' : `${row.accuracy}%`,
+                  height: '4px',
+                  background: fillColor,
+                  borderRadius: '1px',
+                }}
+              />
+            </div>
+            <span
+              style={{
+                width: '35px',
+                textAlign: 'right',
+                color: row.accuracy === null ? '#333333' : fillColor,
+                fontSize: '10px',
+              }}
+            >
+              {row.accuracy === null ? '——' : `${row.accuracy}%`}
+            </span>
+          </div>
+        )
+      })}
+
+      {/* Calibration insight — branches per the spec. */}
+      {(() => {
+        const high = calibration.highConfidenceAccuracy
+        const med = calibration.mediumConfidenceAccuracy
+        if (allNull) {
+          return (
+            <div style={{ color: '#333333', fontSize: '9px', marginTop: '8px' }}>
+              More data needed per confidence level.
+            </div>
+          )
+        }
+        if (high !== null && high < 50) {
+          return (
+            <div
+              style={{
+                color: '#f87171',
+                fontSize: '9px',
+                marginTop: '8px',
+                lineHeight: 1.4,
+              }}
+            >
+              ⚠ System accuracy below 50% on HIGH confidence. Review trade
+              conditions and consider only trading at 8/8 confluence until
+              accuracy improves.
+            </div>
+          )
+        }
+        if (high !== null && med !== null && high < med) {
+          return (
+            <div
+              style={{
+                color: '#fbbf24',
+                fontSize: '9px',
+                marginTop: '8px',
+                lineHeight: 1.4,
+              }}
+            >
+              ⚠ HIGH confidence underperforming MEDIUM — reduce position size on
+              HIGH confidence signals.
+            </div>
+          )
+        }
+        if (high !== null && med !== null && high >= med) {
+          return (
+            <div style={{ color: '#4ade80', fontSize: '9px', marginTop: '8px' }}>
+              HIGH confidence is performing as expected.
+            </div>
+          )
+        }
+        return null
+      })()}
+    </>
+  )
+}
+
 // ─────────────────────────────────────────────────────────────────
 // Main component
 // ─────────────────────────────────────────────────────────────────
@@ -506,6 +666,19 @@ export default function AnalysisPanel({
     technicals.indicators,
     onLevelsUpdate,
   ])
+
+  // [SPRINT-11] Confidence calibration. Recomputed on mount,
+  // whenever a fresh analysis lands (data?.generatedAt changes),
+  // and whenever history mutates (the historyUpdated event fires
+  // through useHistory which we already subscribe to). The
+  // calibration card only renders fully when isCalibrated is true
+  // (>= 10 decided outcomes).
+  const [calibration, setCalibration] = useState<ConfidenceCalibration | null>(
+    null
+  )
+  useEffect(() => {
+    setCalibration(computeCalibration())
+  }, [data?.generatedAt, history.history])
 
   // [SPRINT-5] Persist each successful analysis to localStorage
   // history. Keyed off generatedAt so we save once per unique
@@ -1271,6 +1444,79 @@ export default function AnalysisPanel({
           <div style={{ color: '#666666', fontSize: '9px' }}>Lancer une analyse pour générer une thèse de trade.</div>
         )}
       </div>
+
+      {/* [SPRINT-11] Calibration card — accuracy by confidence level.
+          Below 10 decided outcomes: shows a progress bar so the
+          trader knows how many more analyses they need.
+          At ≥10 outcomes: three rows (HIGH/MEDIUM/LOW) with
+          accuracy bars + an insight line under them. The card
+          slots between the catalyst block and the action button
+          per the SPRINT-11 spec. */}
+      {calibration && (
+        <div
+          data-section="calibration"
+          style={{
+            padding: '8px 12px',
+            borderTop: '1px solid #222222',
+            borderBottom: '1px solid #222222',
+          }}
+        >
+          <div
+            style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '8px',
+            }}
+          >
+            <Tooltip
+              position="left"
+              content="How accurate the system's confidence levels have been for your trades. HIGH confidence should be right more often than MEDIUM. If not, adjust your strategy accordingly. Requires 10+ completed trade outcomes."
+            >
+              <span
+                style={{
+                  color: '#888888',
+                  fontSize: '9px',
+                  textTransform: 'uppercase',
+                  letterSpacing: '0.12em',
+                }}
+              >
+                CALIBRATION
+              </span>
+            </Tooltip>
+            <span style={{ color: '#444444', fontSize: '9px' }}>
+              {calibration.recordsWithOutcome} outcomes
+            </span>
+          </div>
+
+          {!calibration.isCalibrated ? (
+            // Not yet calibrated — show progress toward 10 outcomes.
+            <>
+              <div style={{ color: '#444444', fontSize: '9px', marginBottom: '4px' }}>
+                {calibration.recordsWithOutcome}/10 outcomes needed
+              </div>
+              <div
+                style={{
+                  height: '2px',
+                  background: '#1e1e1e',
+                  borderRadius: '1px',
+                }}
+              >
+                <div
+                  style={{
+                    width: `${Math.min(100, (calibration.recordsWithOutcome / 10) * 100)}%`,
+                    height: '2px',
+                    background: '#444444',
+                    borderRadius: '1px',
+                  }}
+                />
+              </div>
+            </>
+          ) : (
+            <CalibrationRows calibration={calibration} />
+          )}
+        </div>
+      )}
 
       {/* 7. Action button — primary CTA for the dashboard.
             Four states:
