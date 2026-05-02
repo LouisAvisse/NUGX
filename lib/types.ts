@@ -672,17 +672,40 @@ export interface AnalysisHistoryRecord {
   invalidationLevel: string
   riskReward: string
 
-  // Outcome tracking — filled in by the follow-up checker.
-  // priceAt2H / priceAt4H are the spot prices at the check time;
-  // outcome2H / outcome4H classify what happened relative to the
-  // entry/stop/target. Both pairs are independent — a trade can
-  // be OPEN at 2H and HIT_TARGET at 4H.
+  // [LEGACY] Point-in-time outcome tracking. Kept on existing
+  // records for backward compatibility but no longer written for
+  // new records — the path-based replay below replaces it. See
+  // [PHASE-1] notes for the false-positive bug this caused.
   priceAt2H?: number
   priceAt4H?: number
   checkedAt2H?: string              // ISO 8601
   checkedAt4H?: string              // ISO 8601
   outcome2H?: TradeOutcome
   outcome4H?: TradeOutcome
+
+  // [PHASE-1] Path-based replay outcome.
+  //
+  // Computed by walking 5-min candles between generatedAt and
+  // generatedAt+4H and recording which level was wick-touched
+  // FIRST. Replaces the legacy outcome2H/outcome4H point-in-time
+  // check, which produced false positives whenever price hit the
+  // stop and then mean-reverted to the target before +4H.
+  //
+  // hitOutcome is the source of truth going forward. Records that
+  // pre-date this fix carry legacyOutcome=true and are excluded
+  // from calibration math via getDecidedOutcome / computeCalibration.
+  hitAt?: string                    // ISO 8601 — first candle that touched stop or target
+  hitOutcome?: TradeOutcome         // path-based classification
+  pathMaxFavorable?: number         // best price reached in window for the trade direction
+  pathMaxAdverse?: number           // worst price reached (drawdown) for the trade direction
+  replayCheckedAt?: string          // ISO 8601 — when the replay last ran for this record
+  replayCandleCount?: number        // how many 5m candles were consumed (forensics)
+
+  // Pre-fix records — outcome2H/4H present but produced by the
+  // broken classifier. Tagged once at module load by
+  // migrateLegacyTags() and filtered out of every accuracy
+  // surface. Do not re-set on records with hitOutcome populated.
+  legacyOutcome?: boolean
 }
 
 // Aggregate stats computed from AnalysisHistoryRecord[]. Drives

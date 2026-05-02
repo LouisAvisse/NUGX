@@ -96,6 +96,60 @@ function isValidRecord(r: unknown): r is AnalysisHistoryRecord {
   )
 }
 
+// [PHASE-1] One-shot legacy migration. Records that pre-date the
+// path-replay fix were classified by the old point-in-time
+// comparator (false-positive whenever price hit stop and then
+// mean-reverted to target before +4H). They get tagged here so
+// every accuracy surface (bucketStats, computeCalibration) can
+// filter them out. Idempotent: only flips undefined → true,
+// never overwrites a record that already has hitOutcome.
+//
+// Gated by a localStorage flag + an in-memory `migrated` boolean
+// so it runs at most once per session, not per readAll() call.
+const LEGACY_MIGRATION_KEY = 'goldDashboard_legacyMigrated_v1'
+let migrated = false
+function migrateLegacyTags(records: AnalysisHistoryRecord[]): AnalysisHistoryRecord[] {
+  if (migrated) return records
+  migrated = true
+  if (typeof window === 'undefined') return records
+  try {
+    if (window.localStorage.getItem(LEGACY_MIGRATION_KEY) === '1') {
+      return records
+    }
+  } catch {
+    return records
+  }
+  let touched = false
+  for (const r of records) {
+    const hasLegacyOutcome =
+      r.outcome2H !== undefined || r.outcome4H !== undefined
+    if (
+      hasLegacyOutcome &&
+      r.hitOutcome === undefined &&
+      r.legacyOutcome === undefined
+    ) {
+      r.legacyOutcome = true
+      touched = true
+    }
+  }
+  if (touched) {
+    try {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(records))
+    } catch {
+      // Quota / serialize failure — drop the write. Migration
+      // re-runs next session because LEGACY_MIGRATION_KEY won't
+      // be set; that's fine, the operation is idempotent.
+    }
+  }
+  try {
+    window.localStorage.setItem(LEGACY_MIGRATION_KEY, '1')
+  } catch {
+    // Same posture — flag write failure means we'll re-attempt
+    // next session, which is harmless.
+  }
+  return records
+}
+
 // Read + parse the stored array. Defensive against any kind of
 // storage corruption: missing key, non-JSON, non-array, missing
 // fields, or per-record schema violations. Always returns an
@@ -109,7 +163,10 @@ function readAll(): AnalysisHistoryRecord[] {
     if (!Array.isArray(parsed)) return []
     // [SECURITY L6] Drop records that don't pass the per-record
     // schema check — the array stays well-typed downstream.
-    return parsed.filter(isValidRecord)
+    const valid = parsed.filter(isValidRecord)
+    // [PHASE-1] Tag pre-fix records as legacy so calibration
+    // doesn't read their false-positive outcomes.
+    return migrateLegacyTags(valid)
   } catch {
     return []
   }
@@ -207,10 +264,156 @@ function classifyOutcome(
   return 'OPEN'
 }
 
-// Fill in the +2H or +4H outcome on a single record. Called by
-// the useHistory hook's interval checker — once at +2H per record,
-// once again at +4H. Idempotent on the storage write so a duplicate
-// call (e.g. on a stale interval) doesn't corrupt anything.
+// [PHASE-1] One 5-min candle as returned by /api/replay. We only
+// keep the fields replayPath actually reads; close is preserved
+// for future scenarios (e.g. computing path return at horizon).
+export interface ReplayCandle {
+  time: number   // unix seconds
+  high: number
+  low: number
+  close: number
+}
+
+// Minimum candles required for a meaningful classification —
+// 24 5-min bars ≈ 2h of data. Below this we don't have enough
+// path to call HIT_TARGET / HIT_STOP confidently and return
+// INCONCLUSIVE. Yahoo gaps on weekends easily push some windows
+// below this threshold.
+const MIN_CANDLES_FOR_REPLAY = 24
+
+// [PHASE-1] Path-based classifier — replaces the broken
+// point-in-time `classifyOutcome`. Walks candles in time order
+// and returns whichever level was wick-touched FIRST.
+//
+// Same-candle ambiguity (a single 5-min bar whose wick swept
+// both stop and target): STOP wins. Conservative — better to
+// under-report wins than over-report them; matches the
+// "assume worst-case fill" posture institutional desks use.
+//
+// Returns INCONCLUSIVE for: FLAT records (no trade), unparseable
+// stop/target strings (e.g. "——"), too few candles
+// (<MIN_CANDLES_FOR_REPLAY).
+export function replayPath(
+  record: AnalysisHistoryRecord,
+  candles: ReplayCandle[]
+): {
+  hitOutcome: TradeOutcome
+  hitAt?: string
+  pathMaxFavorable: number
+  pathMaxAdverse: number
+} {
+  const priceAnchor = record.priceAtAnalysis
+  const inconclusive = {
+    hitOutcome: 'INCONCLUSIVE' as TradeOutcome,
+    pathMaxFavorable: priceAnchor,
+    pathMaxAdverse: priceAnchor,
+  }
+
+  if (record.recommendation === 'FLAT') return inconclusive
+  if (candles.length < MIN_CANDLES_FOR_REPLAY) return inconclusive
+
+  const stop = parseFirstNumber(record.stop)
+  const target = parseFirstNumber(record.target)
+  if (
+    !Number.isFinite(stop) ||
+    !Number.isFinite(target) ||
+    stop === 0 ||
+    target === 0
+  ) {
+    return inconclusive
+  }
+
+  const isLong = record.recommendation === 'LONG'
+
+  // Path extremes — favorable = best price seen for the trade
+  // direction (high for LONG, low for SHORT); adverse = the
+  // worst (drawdown).
+  let favorable = isLong ? -Infinity : Infinity
+  let adverse = isLong ? Infinity : -Infinity
+
+  for (const c of candles) {
+    // Update extremes BEFORE the hit check so a candle that
+    // resolves the trade still contributes its wick to the path
+    // statistics.
+    if (isLong) {
+      if (c.high > favorable) favorable = c.high
+      if (c.low < adverse) adverse = c.low
+    } else {
+      if (c.low < favorable) favorable = c.low
+      if (c.high > adverse) adverse = c.high
+    }
+
+    // Stop check first → conservative tie-break on same-candle
+    // ambiguity. For LONG, stop is below entry → triggered when
+    // candle low ≤ stop. For SHORT, stop is above entry →
+    // triggered when candle high ≥ stop.
+    const stopHit = isLong ? c.low <= stop : c.high >= stop
+    const targetHit = isLong ? c.high >= target : c.low <= target
+
+    if (stopHit) {
+      return {
+        hitOutcome: 'HIT_STOP',
+        hitAt: new Date(c.time * 1000).toISOString(),
+        pathMaxFavorable: favorable,
+        pathMaxAdverse: adverse,
+      }
+    }
+    if (targetHit) {
+      return {
+        hitOutcome: 'HIT_TARGET',
+        hitAt: new Date(c.time * 1000).toISOString(),
+        pathMaxFavorable: favorable,
+        pathMaxAdverse: adverse,
+      }
+    }
+  }
+
+  // Walked the full window without hitting either level. The
+  // trade ran out of time — classified OPEN. Calibration math
+  // already excludes OPEN from accuracy buckets via
+  // getDecidedOutcome, so this isn't a false positive.
+  return {
+    hitOutcome: 'OPEN',
+    pathMaxFavorable: favorable,
+    pathMaxAdverse: adverse,
+  }
+}
+
+// [PHASE-1] Persist the result of a path replay to a single
+// record. Called by the useHistory checker once /api/replay
+// returns enough candles + bufferOk=true. Idempotent: skips if
+// hitOutcome is already set.
+//
+// Returns true when the record was written, false otherwise —
+// useful for the hook to decide whether to dispatch the
+// historyUpdated event.
+export function updateOutcomeFromReplay(
+  id: string,
+  candles: ReplayCandle[]
+): boolean {
+  const all = readAll()
+  const idx = all.findIndex((r) => r.id === id)
+  if (idx < 0) return false
+  const record = all[idx]
+  if (record.hitOutcome !== undefined) return false
+
+  const result = replayPath(record, candles)
+  record.hitOutcome = result.hitOutcome
+  record.hitAt = result.hitAt
+  record.pathMaxFavorable = result.pathMaxFavorable
+  record.pathMaxAdverse = result.pathMaxAdverse
+  record.replayCheckedAt = new Date().toISOString()
+  record.replayCandleCount = candles.length
+
+  all[idx] = record
+  writeAll(all)
+  return true
+}
+
+// [LEGACY] Fill in the +2H or +4H outcome on a single record.
+// Pre-Phase-1 callers used this; superseded by
+// updateOutcomeFromReplay above. Retained because the function
+// is exported and may be referenced by future migration tooling.
 export function updateOutcome(
   id: string,
   timeframe: '2H' | '4H',
@@ -236,14 +439,22 @@ export function updateOutcome(
   writeAll(all)
 }
 
-// Pick the most authoritative outcome on a record. Prefer 4H
-// (more time for the trade to resolve); fall back to 2H so
-// freshly-decided records aren't excluded for the first two hours
-// of their lifetime.
+// [PHASE-1] Pick the authoritative outcome on a record.
+//
+// Reads ONLY the path-based hitOutcome — the legacy
+// outcome2H/outcome4H fields are NOT a fallback because their
+// classifier was structurally broken (false positives whenever
+// price hit stop and then mean-reverted to target before +4H).
+// Records carrying legacyOutcome=true return null so they're
+// excluded from every accuracy surface.
+//
+// Calibration card naturally hides itself until enough fresh
+// (post-Phase-1) outcomes accumulate via the
+// MIN_CALIBRATED_OUTCOMES gate in lib/calibration.ts.
 function getDecidedOutcome(r: AnalysisHistoryRecord): TradeOutcome | null {
-  const o = r.outcome4H ?? r.outcome2H
-  if (o === undefined) return null
-  return o
+  if (r.legacyOutcome) return null
+  if (r.hitOutcome === undefined) return null
+  return r.hitOutcome
 }
 
 // Bucket-accuracy helper used across bySession / byConfluenceScore /
@@ -293,13 +504,14 @@ export function getPersonalPatterns(): PersonalPatterns {
   const all = getHistory()
   const totalAnalyses = all.length
 
-  // Records with at least one outcome (even if OPEN/INCONCLUSIVE)
-  // are counted in totalWithOutcome so the onboarding gauge
-  // (5/5 outcomes needed) reflects what the trader sees. The
-  // accuracy buckets below filter further down to decided
-  // outcomes only.
+  // [PHASE-1] Records with at least one path-based outcome
+  // (even if OPEN/INCONCLUSIVE) are counted in totalWithOutcome
+  // so the onboarding gauge reflects what the trader sees.
+  // Legacy point-in-time records are excluded — their classifier
+  // was broken; counting them would let the gauge claim "ready"
+  // when the underlying accuracy math is still empty.
   const withOutcome = all.filter(
-    (r) => r.outcome4H !== undefined || r.outcome2H !== undefined
+    (r) => r.hitOutcome !== undefined && !r.legacyOutcome
   )
   const totalWithOutcome = withOutcome.length
 

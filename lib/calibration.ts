@@ -24,11 +24,18 @@ const MIN_BUCKET_OUTCOMES = 3
 // back and show the progress-bar onboarding state instead.
 const MIN_CALIBRATED_OUTCOMES = 10
 
-// Map a record's outcome to a tri-state correct/incorrect/null.
-// Prefer 4H over 2H for the verdict; OPEN + INCONCLUSIVE return
-// null and are excluded from accuracy math.
+// [PHASE-1] Map a record's outcome to a tri-state.
+//
+// Reads ONLY the path-based hitOutcome — legacy outcome2H/4H
+// fields are ignored because their classifier was structurally
+// broken (false positives on stop-then-target paths).
+// legacyOutcome=true records are excluded so the accuracy %
+// reflects only post-fix data. The MIN_CALIBRATED_OUTCOMES gate
+// below keeps the card in onboarding state until enough fresh
+// outcomes accumulate.
 function getOutcome(r: AnalysisHistoryRecord): 'correct' | 'incorrect' | null {
-  const outcome: TradeOutcome | undefined = r.outcome4H ?? r.outcome2H
+  if (r.legacyOutcome) return null
+  const outcome: TradeOutcome | undefined = r.hitOutcome
   if (outcome === 'HIT_TARGET') return 'correct'
   if (outcome === 'HIT_STOP') return 'incorrect'
   return null
@@ -46,12 +53,14 @@ function calcAccuracy(records: AnalysisHistoryRecord[]): number | null {
 
 export function computeCalibration(): ConfidenceCalibration {
   const history = getHistory()
-  // Records "with outcome" = records the checker has touched at
-  // least once (even if the verdict is OPEN/INCONCLUSIVE). This
-  // matches PersonalPatterns.totalWithOutcome semantics so the
-  // two surfaces use the same denominator.
+  // [PHASE-1] Records "with outcome" = records the path-based
+  // replay has resolved. Legacy point-in-time records are
+  // excluded — they exist in storage but their classifier was
+  // broken; counting them inflates the denominator while
+  // contributing nothing to the numerator (getOutcome returns
+  // null on legacyOutcome). This matches PersonalPatterns.
   const withOutcome = history.filter(
-    (r) => r.outcome4H !== undefined || r.outcome2H !== undefined
+    (r) => r.hitOutcome !== undefined && !r.legacyOutcome
   )
 
   const high = withOutcome.filter((r) => r.confidence === 'HIGH')
