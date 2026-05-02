@@ -49,6 +49,7 @@
 'use client'
 
 import { useEffect, useMemo, useRef, useState } from 'react'
+import Tooltip from '@/components/Tooltip'
 import { useTechnicals } from '@/lib/hooks/useTechnicals'
 import type {
   ChartCandle,
@@ -648,9 +649,14 @@ export default function GoldChart({ levels }: GoldChartProps) {
             ● EMA200
           </span>
           {activePatterns.length > 0 && (
-            <span style={{ color: COLOR_NEUTRAL }}>
-              ● {activePatterns.length} PATTERN{activePatterns.length > 1 ? 'S' : ''}
-            </span>
+            <Tooltip
+              position="bottom"
+              content="Candlestick patterns detected on this timeframe. Arrows show pattern location on the candles. Bullish patterns shown below candles in green, bearish above in red, neutral (compression) as amber circles."
+            >
+              <span style={{ color: COLOR_NEUTRAL }}>
+                ● {activePatterns.length} PATTERN{activePatterns.length > 1 ? 'S' : ''}
+              </span>
+            </Tooltip>
           )}
           {hasEntry && <span style={{ color: COLOR_ENTRY }}>┄ ENTRY</span>}
           {hasStop && <span style={{ color: COLOR_STOP }}>┄ STOP</span>}
@@ -690,7 +696,12 @@ export default function GoldChart({ levels }: GoldChartProps) {
             15M: {trend15.replace('TREND', '')}
           </span>
           {aligned && (
-            <span style={{ color: alignedColor, fontWeight: 500 }}>● ALIGNED</span>
+            <Tooltip
+              position="bottom"
+              content="All three timeframes (4H, 1H, 15M) show the same trend direction. This is a high-conviction confluence signal — the strongest technical setup the system can identify."
+            >
+              <span style={{ color: alignedColor, fontWeight: 500 }}>● ALIGNED</span>
+            </Tooltip>
           )}
         </div>
 

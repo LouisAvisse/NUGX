@@ -66,6 +66,10 @@ export default function BriefingModal({
       }}
     >
       <div
+        // [SPRINT-12] fade-in for the briefing modal. Slide-in
+        // doesn't suit a center-anchored modal, so we use the
+        // existing fadeIn keyframe (already defined in globals).
+        className="fade-in"
         onClick={(e) => e.stopPropagation()}
         style={{
           width: '480px',

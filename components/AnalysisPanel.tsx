@@ -32,7 +32,7 @@ import { useTechnicals } from '@/lib/hooks/useTechnicals'
 import { useCalendar } from '@/lib/hooks/useCalendar'
 import { useHistory } from '@/lib/hooks/useHistory'
 import { computeCalibration } from '@/lib/calibration'
-import { biasColor, formatDateTime } from '@/lib/utils'
+import { biasColor, formatDateTime, parsePrice } from '@/lib/utils'
 import { getCurrentSession } from '@/lib/session'
 import type {
   AnalysisRequest,
@@ -423,19 +423,14 @@ function buildPersonalPatterns(
   }
 }
 
-// Parse the first finite number out of a level string.
-// Marcus Reid's confluence engine emits levels as ranges
-// ("3281-3284"), single values ("3265"), or notes with prefixes
-// ("above 3300"). The chart only needs ONE numeric anchor per
-// level — we grab whichever number appears first. Returns
-// undefined when nothing parseable is found so the chart can
-// skip the line entirely.
+// [SPRINT-12] Local helper now delegates to the shared parsePrice
+// in lib/utils. Returns undefined (not 0) when there's nothing to
+// render — chart consumers want the level skipped entirely rather
+// than drawn at $0. Keeping this thin wrapper avoids cascading
+// changes through every call site.
 function parseFirstNumber(s: string | undefined): number | undefined {
-  if (!s) return undefined
-  const m = s.match(/-?\d+(?:\.\d+)?/)
-  if (!m) return undefined
-  const n = parseFloat(m[0])
-  return Number.isFinite(n) ? n : undefined
+  const n = parsePrice(s)
+  return n > 0 ? n : undefined
 }
 
 // [SPRINT-11] Calibration breakdown — three confidence-level

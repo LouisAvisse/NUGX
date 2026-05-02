@@ -165,3 +165,19 @@ body {
 .alert-banner {
   animation: slideDown 0.2s ease-out;
 }
+
+/* [SPRINT-12] Slide-in — used by JournalPanel + BriefingModal
+ * for a consistent enter animation across overlay surfaces. */
+@keyframes slideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+.slide-in {
+  animation: slideIn 0.25s ease-out;
+}

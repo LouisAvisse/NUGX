@@ -74,3 +74,25 @@ export function biasColor(bias: 'BULLISH' | 'BEARISH' | 'NEUTRAL'): string {
   if (bias === 'BEARISH') return '#f87171'
   return '#fbbf24'
 }
+
+// [SPRINT-12] Parse the first finite number out of a level string.
+// Marcus Reid's confluence engine emits levels as ranges
+// ("3281-3284"), single values ("3265"), values with a $ prefix
+// ("$3,281"), or notes with prefixes ("above 3300"). We strip
+// $/comma/space first, then grab the first number; "——" returns
+// 0 (the "not a level" sentinel). Returns 0 — not NaN — so
+// callers can do direct comparisons + treat 0 as "no data".
+//
+// Centralised here so AnalysisPanel.parseFirstNumber, the
+// outcome classifier in lib/history.ts, and the price-cross
+// detector in lib/hooks/useAlerts.ts all use the same logic.
+// Each module has historically had its own near-identical copy;
+// future fix-ups land in one place.
+export function parsePrice(str: string | undefined): number {
+  if (!str || str === '——') return 0
+  const cleaned = str.replace(/[$,\s]/g, '')
+  const match = cleaned.match(/-?\d+(?:\.\d+)?/)
+  if (!match) return 0
+  const n = parseFloat(match[0])
+  return Number.isFinite(n) ? n : 0
+}

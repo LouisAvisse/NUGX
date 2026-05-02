@@ -20,6 +20,7 @@ import {
   dismissAll as dismissAllInStorage,
   getActiveAlerts,
 } from '@/lib/alerts'
+import { parsePrice } from '@/lib/utils'
 import type { AnalysisResult, InvalidationAlert } from '@/lib/types'
 
 interface UseAlertsParams {
@@ -44,14 +45,12 @@ const WARNING_BAND_PCT = 0.5
 // state changes (e.g. dismissed in another tab).
 const REFRESH_INTERVAL_MS = 10 * 1000
 
-// Parse a level string the way AnalysisPanel + lib/history.ts
-// do — first finite number wins. "3280-3285" → 3280, "above
-// 3300" → 3300, "——" → NaN.
+// [SPRINT-12] Local wrapper delegates to shared parsePrice.
+// parsePrice returns 0 for unparseable / "——" — the caller
+// already short-circuits on `!Number.isFinite(price) ||
+// price === 0`, so swapping NaN→0 is safe.
 function parseFirstNumber(s: string | undefined): number {
-  if (!s || s === '——') return NaN
-  const m = s.match(/-?\d+(?:\.\d+)?/)
-  if (!m) return NaN
-  return parseFloat(m[0])
+  return parsePrice(s)
 }
 
 export function useAlerts({

@@ -609,6 +609,10 @@ export default function JournalPanel({ isOpen, onClose }: JournalPanelProps) {
     >
       <aside
         data-section="journal-panel"
+        // [SPRINT-12] slide-in keyframe class for a consistent
+        // enter animation across overlay surfaces (Journal +
+        // Briefing). Lives in app/globals.css.
+        className="slide-in"
         // Stop click propagation so clicking inside the panel
         // doesn't close it via the overlay's onClick.
         onClick={(e) => e.stopPropagation()}

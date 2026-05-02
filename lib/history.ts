@@ -25,6 +25,7 @@ import type {
   PersonalPatterns,
   TradeOutcome,
 } from '@/lib/types'
+import { parsePrice } from '@/lib/utils'
 
 // Single localStorage key — matches the journal pattern from
 // .claude/context.md ("goldDashboard_*").
@@ -57,17 +58,13 @@ function genId(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
 }
 
-// Parse the first finite number out of a level string. Mirrors
-// the parsing logic in AnalysisPanel.parseFirstNumber so a
-// "3280-3285" entry collapses to 3280, "above 3300" → 3300, etc.
-// Returns NaN when nothing parseable is found so callers can
-// detect that and emit INCONCLUSIVE.
+// [SPRINT-12] Local wrapper now delegates to the shared parsePrice
+// helper in lib/utils. parsePrice returns 0 when nothing parses
+// — `classifyOutcome` already treats 0 as "unparseable" via the
+// `stop === 0 || target === 0` check below, so the calling
+// semantics are unchanged.
 function parseFirstNumber(s: string | undefined): number {
-  if (!s) return NaN
-  if (s === '——') return NaN
-  const m = s.match(/-?\d+(?:\.\d+)?/)
-  if (!m) return NaN
-  return parseFloat(m[0])
+  return parsePrice(s)
 }
 
 // Read + parse the stored array. Defensive against any kind of
