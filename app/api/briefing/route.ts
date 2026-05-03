@@ -17,6 +17,8 @@ import type { SessionBriefingContent } from '@/lib/types'
 
 const client = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
+  // [DEPLOY/I18] 30s timeout — see /api/analyze for rationale.
+  timeout: 30_000,
 })
 
 // ─────────────────────────────────────────────────────────────────

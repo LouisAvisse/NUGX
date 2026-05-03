@@ -21,6 +21,14 @@ import { detectSetup, displaySetupName } from '@/lib/setups'
 
 const client = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
+  // [DEPLOY/I18] Cap individual SDK calls at 30 seconds. The
+  // SDK default is 10 minutes, which is fine on localhost but
+  // a serverless worker holding a hung connection that long is
+  // a real cost on Vercel + a real DoS surface. 30s is well
+  // above realistic Claude latency (sonnet typically responds
+  // in 4-12s on our payload size) but tight enough that a
+  // genuinely stuck call is cleared quickly.
+  timeout: 30_000,
 })
 
 // ─────────────────────────────────────────────────────────────────

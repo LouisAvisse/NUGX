@@ -812,6 +812,22 @@ export default function GoldChart({ levels }: GoldChartProps) {
             display: 'block',
             background: '#0d0d0d',
           }}
+          // [DEPLOY/L8] Iframe sandbox — restricts what the
+          // embedded TradingView page can do if it's ever
+          // compromised. We allow:
+          //   allow-scripts        — the widget IS a script.
+          //   allow-same-origin    — it needs cookies to remember
+          //                          chart prefs across loads.
+          //   allow-popups         — the "expand" / "open chart"
+          //                          buttons open new tabs.
+          //   allow-forms          — the symbol search submits.
+          //   allow-popups-to-escape-sandbox — opened tabs
+          //                          shouldn't inherit sandbox.
+          // Notably DENIED: allow-top-navigation (the widget
+          // can't redirect the parent window) and
+          // allow-modals/allow-pointer-lock (no need).
+          sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-popups-to-escape-sandbox"
+          referrerPolicy="no-referrer"
           allowFullScreen
           scrolling="no"
         />
