@@ -47,7 +47,12 @@ import {
   displaySignalShort,
   T,
 } from '@/lib/copy'
-import { displaySetupName } from '@/lib/setups'
+import {
+  displaySetupName,
+  computeSetupAccuracy,
+  setupChipTone,
+  SETUP_CHIP_PALETTE,
+} from '@/lib/setups'
 import { getCurrentSession } from '@/lib/session'
 import type {
   AnalysisRequest,
@@ -1652,29 +1657,63 @@ export default function AnalysisPanel({
                 CONFLUENCE
               </span>
             </Tooltip>
-            {/* [PHASE-2] Setup chip — only renders when a named
-                setup matched. Inline next to the CONFLUENCE label
-                so the trader scans both at the same eye line. */}
-            {!showSkeleton && !showError && data?.detectedSetup ? (
-              <Tooltip
-                position="bottom"
-                content="Setup nommé détecté — pattern récurrent à haute probabilité. La détection ouvre la voie aux statistiques par setup et aux entrées plus précises dans les phases suivantes."
-              >
-                <span
-                  style={{
-                    color: '#60a5fa',
-                    background: '#0a1420',
-                    border: '1px solid #1a2a3a',
-                    fontSize: '8px',
-                    padding: '1px 5px',
-                    letterSpacing: '0.08em',
-                    fontFamily: 'var(--font-sans)',
-                  }}
-                >
-                  {displaySetupName(data.detectedSetup)}
-                </span>
-              </Tooltip>
-            ) : null}
+            {/* [PHASE-2/11.2] Setup chip — only renders when a
+                named setup matched. Phase 11.2 colors the chip
+                from the trader's OWN historical accuracy on this
+                setup, computed via computeSetupAccuracy over
+                history.history. Below MIN_SAMPLES (5) the chip
+                shows the neutral blue palette ("not enough data
+                yet"). Above MIN_SAMPLES, green/amber/red bands
+                signal personal edge — green = historical winner,
+                red = documented anti-edge. The trader can fade
+                or skip red chips with confidence; the system is
+                openly admitting where the named setup hasn't
+                worked for them. */}
+            {!showSkeleton && !showError && data?.detectedSetup
+              ? (() => {
+                  const stats = computeSetupAccuracy(
+                    data.detectedSetup,
+                    history.history
+                  )
+                  const tone = setupChipTone(stats)
+                  const palette = SETUP_CHIP_PALETTE[tone]
+                  // Tooltip body changes with tone so the trader
+                  // sees the data backing the color in plain
+                  // language. NEUTRAL stays generic; the three
+                  // data-backed tones surface decided count +
+                  // accuracy.
+                  const tooltipBody =
+                    tone === 'NEUTRAL'
+                      ? "Setup nommé détecté. Trop peu de résultats personnels (< 5) pour évaluer son edge — le chip se colorera après les premiers résultats résolus."
+                      : tone === 'WIN'
+                        ? `Setup gagnant dans votre historique : ${stats.wins}V / ${stats.losses}P sur ${stats.decided} résultats résolus, soit ${stats.accuracy}%. Trader avec conviction.`
+                        : tone === 'MIXED'
+                          ? `Setup neutre dans votre historique : ${stats.wins}V / ${stats.losses}P sur ${stats.decided} résultats, soit ${stats.accuracy}%. Coin-flip — s'appuyer sur les autres signaux.`
+                          : `Setup perdant dans votre historique : ${stats.wins}V / ${stats.losses}P sur ${stats.decided} résultats, soit ${stats.accuracy}%. Anti-edge documenté — fader ou passer.`
+                  return (
+                    <Tooltip position="bottom" content={tooltipBody}>
+                      <span
+                        style={{
+                          color: palette.color,
+                          background: palette.background,
+                          border: palette.border,
+                          fontSize: '8px',
+                          padding: '1px 5px',
+                          letterSpacing: '0.08em',
+                          fontFamily: 'var(--font-sans)',
+                        }}
+                      >
+                        {displaySetupName(data.detectedSetup)}
+                        {stats.accuracy !== null ? (
+                          <span style={{ marginLeft: '4px', opacity: 0.8 }}>
+                            · {stats.accuracy}%
+                          </span>
+                        ) : null}
+                      </span>
+                    </Tooltip>
+                  )
+                })()
+              : null}
           </div>
           {showSkeleton ? (
             <Skeleton width={48} height={12} />

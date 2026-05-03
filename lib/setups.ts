@@ -234,3 +234,81 @@ export function displaySetupName(name: SetupName): string {
       return 'PULLBACK EMA20'
   }
 }
+
+// [PHASE-11.2] Per-setup historical accuracy stats.
+//
+// Phase 11.1 backtests showed two of the named setups
+// (LONDON_CONTINUATION, NY_OVERLAP_TREND) carrying negative
+// expectancy in this market regime. Phase 11.1's first attempt
+// — suppressing those chips — actually hurt overall edge by
+// hiding information the trader was using. The right fix is to
+// invert the framing: keep the chip visible, but color it
+// according to the trader's OWN historical accuracy on that
+// setup. A green chip means "your data says this setup wins";
+// red means "your data says this setup loses, fade or skip";
+// amber/blue means "not enough data yet to know".
+//
+// Pure read over getHistory(). Excludes legacyOutcome records
+// (pre-Phase-1 false positives) and OPEN/INCONCLUSIVE outcomes.
+// Returns null accuracy when fewer than MIN_SAMPLES decided —
+// same convention as Phase 6 rehearsal so a tiny sample never
+// drives the chip color.
+const SETUP_ACCURACY_MIN_SAMPLES = 5
+
+export interface SetupAccuracy {
+  setup: SetupName
+  decided: number
+  wins: number
+  losses: number
+  accuracy: number | null      // 0..100, null when decided < MIN_SAMPLES
+}
+
+export function computeSetupAccuracy(
+  setup: SetupName,
+  records: import('@/lib/types').AnalysisHistoryRecord[]
+): SetupAccuracy {
+  const matching = records.filter(
+    (r) =>
+      r.detectedSetup === setup &&
+      !r.legacyOutcome &&
+      (r.hitOutcome === 'HIT_TARGET' || r.hitOutcome === 'HIT_STOP')
+  )
+  const wins = matching.filter((r) => r.hitOutcome === 'HIT_TARGET').length
+  const losses = matching.filter((r) => r.hitOutcome === 'HIT_STOP').length
+  const decided = wins + losses
+  const accuracy =
+    decided >= SETUP_ACCURACY_MIN_SAMPLES
+      ? Math.round((wins / decided) * 100)
+      : null
+  return { setup, decided, wins, losses, accuracy }
+}
+
+// Chip palette for one setup, derived from its historical
+// accuracy. Three bands map to the existing app palette:
+//   GREEN   (≥ 55%)  — historical winner; trade with conviction
+//   AMBER   (40–55%) — coin flip; rely on other signals
+//   RED     (< 40%)  — anti-edge; setup tends to fail in your tape
+// When accuracy is null (sample < MIN_SAMPLES), keep the
+// pre-Phase-11.2 blue chip — no data yet to override the default.
+export type SetupChipTone = 'NEUTRAL' | 'WIN' | 'MIXED' | 'LOSE'
+
+export function setupChipTone(stats: SetupAccuracy): SetupChipTone {
+  if (stats.accuracy === null) return 'NEUTRAL'
+  if (stats.accuracy >= 55) return 'WIN'
+  if (stats.accuracy >= 40) return 'MIXED'
+  return 'LOSE'
+}
+
+// CSS palette for each tone. Mirrors the bull/bear/amber/info
+// palette established by NewsFeed impact badges and AnalysisPanel
+// confluence colours so the chip reads in the same visual
+// language as the rest of the dashboard.
+export const SETUP_CHIP_PALETTE: Record<
+  SetupChipTone,
+  { color: string; background: string; border: string }
+> = {
+  NEUTRAL: { color: '#60a5fa', background: '#0a1420', border: '1px solid #1a2a3a' },
+  WIN:     { color: '#4ade80', background: '#0a1a0a', border: '1px solid #1a3a1a' },
+  MIXED:   { color: '#fbbf24', background: '#1a1500', border: '1px solid #3a2e00' },
+  LOSE:    { color: '#f87171', background: '#1a0a0a', border: '1px solid #3a1a1a' },
+}
