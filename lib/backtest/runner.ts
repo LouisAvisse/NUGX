@@ -340,6 +340,24 @@ function buildSyntheticRequest(
 // over a 14-day window, enough for statistical signal but not so
 // many that the harness ships every random tape blip.
 const SYNTHETIC_SCORE_FLOOR = 2.25
+
+// [PHASE-11.1] Session-aware floor experiment.
+//
+// Tested raising London + NY/London Overlap to 2.75 to filter
+// out the noisy moderate-confluence setups during peak hours
+// (which the 50-day baseline showed at -0.14R and -0.20R per
+// trade). Result: cumulative dropped from +12R to -5R. The gate
+// removed too many marginal-but-net-positive trades along with
+// the losers — the noise in those sessions cuts both ways.
+//
+// Conclusion: session-quality cannot be solved by a static
+// score floor. A future experiment could try regime-detection
+// (only gate when ATR percentile is high → choppy) or per-
+// session weight calibration. Left here as the documented
+// negative result so future-me doesn't try the same fix again.
+//
+// Live: keep the uniform floor for now. Setup hygiene below is
+// the only behaviour change kept from this round.
 function buildSyntheticTrade(
   evalTime: number,
   candle: BacktestCandle,

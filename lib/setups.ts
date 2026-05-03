@@ -63,6 +63,16 @@ function detectLondonFalseBreak(req: AnalysisRequest): SetupMatch | null {
 // 1H, in the bulk of the London session (07:30-12:00 UTC). The
 // classic "trend started in Asia, continues through London"
 // playbook.
+//
+// [PHASE-11.1 finding] 50-day backtest (March 14 → May 3 2026)
+// showed this setup at 29% accuracy / -0.14R per trade across
+// 103 trades — systematic negative expectancy in chop regimes.
+// I tested suppressing the chip but the result was WORSE: the
+// chip's existence was acting as a soft warning the trader could
+// use via the what-if explorer to avoid these setups. Hiding it
+// removed information. Detector kept intact; future work should
+// flip the chip palette to RED when historical accuracy < 40%
+// (turn it from "high confidence" into "documented anti-edge").
 function detectLondonContinuation(req: AnalysisRequest): SetupMatch | null {
   if (req.session !== 'London') return null
   const utcHour = new Date().getUTCHours()
@@ -84,6 +94,14 @@ function detectLondonContinuation(req: AnalysisRequest): SetupMatch | null {
 // NY/London overlap trend — peak liquidity window with a clear
 // direction. Best session for full-size positions when
 // clearToTrade is true.
+//
+// [PHASE-11.1 finding] 50-day backtest showed this setup at 27%
+// accuracy / -0.20R per trade across 88 trades — the worst
+// expectancy of any named setup in the test window. Same chop-
+// regime issue as LONDON_CONTINUATION (see comment there). Chip
+// kept active because suppressing it actually hurt overall
+// expectancy by removing the soft-warning signal. Future work:
+// drive chip color from historical per-setup accuracy.
 function detectNyOverlapTrend(req: AnalysisRequest): SetupMatch | null {
   if (req.session !== 'NY/London Overlap') return null
   if (!req.clearToTrade) return null
