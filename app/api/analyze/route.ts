@@ -488,8 +488,38 @@ function buildMockAnalysis(req: AnalysisRequest): AnalysisResult {
   const isBearish = bullCount <= 2
 
   const bias = isBullish ? 'BULLISH' : isBearish ? 'BEARISH' : 'NEUTRAL'
+
+  // [FIX] Reconcile the mock recommendation with the
+  // post-mock weightedConfluence threshold. Pre-fix the mock
+  // built a SHORT whenever bullCount <= 2 (boolean count), but
+  // the weighted score (computed AFTER the mock returns) often
+  // landed below the live system's 5.0 actionable threshold —
+  // so the card displayed an actionable trade alongside a
+  // 3.8/10 score that says "do not trade." Trader spotted the
+  // inconsistency.
+  //
+  // The check uses the same SignalBreakdown the mock will emit
+  // below, so the two scores can't disagree. We compute it
+  // here as a quick weighted total: weights mirror DEFAULT_WEIGHTS
+  // in lib/scoring (trend 1.5, momentum 0.75, macd 0.75, dxy 1.5,
+  // us10y 1.5, session 1.5, news 1.5, calendar 1.0 — total 10).
+  const overboughtSignal = !overbought   // !overbought stands in for momentum/RSI guard
+  const bullScore =
+    1.5 * Number(trendBullish) +
+    0.75 * Number(overboughtSignal) +
+    0.75 * Number(macdBullish) +
+    1.5 * Number(dxyBullish) +
+    1.5 * Number(yieldBullish) +
+    1.5 * Number(sessionBullish) +
+    1.5 * Number(newsBullish) +
+    1.0 * Number(calendarBullish)
+  const bearScore = 10 - bullScore   // signals are mutually exclusive
+  const dominantScore = Math.max(bullScore, bearScore)
+  const ACTIONABLE_FLOOR = 5.0
+  const subThreshold = dominantScore < ACTIONABLE_FLOOR
+
   const recommendation =
-    !req.clearToTrade
+    !req.clearToTrade || subThreshold
       ? 'FLAT'
       : isBullish
         ? 'LONG'
