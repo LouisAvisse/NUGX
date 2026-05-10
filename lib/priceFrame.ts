@@ -53,11 +53,21 @@ const BASIS_MAX_ABS = 80
 // Fetch current spot XAU. Returns null on any failure so the
 // caller can decide whether to skip correction or use a stale
 // value. Cheap (single fetch, no auth, ~150ms typical).
+//
+// [PHASE-12.9] /api/price and /api/technicals layer their own
+// yahoo-finance2 XAU=X fallback on top of this function (those
+// routes already depend on yahoo-finance2). priceFrame.ts itself
+// stays HTTP-only so it remains importable from any route without
+// pulling the yahoo-finance2 graph into routes that don't need it.
 export async function fetchSpotXau(): Promise<number | null> {
   try {
     const res = await fetch(GOLD_API_URL, {
       next: { revalidate: 0 },
       headers: { Accept: 'application/json' },
+      // 2.5s upper bound — gold-api typically responds in <500ms;
+      // capping protects callers from a hung primary even when
+      // they've layered their own fallback above us.
+      signal: AbortSignal.timeout(2_500),
     })
     if (!res.ok) return null
     const raw = (await res.json()) as { price?: unknown }

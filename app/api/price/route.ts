@@ -166,11 +166,15 @@ function deriveOhlc(candles: YahooCandle[]): OhlcDerived | null {
 
 // Try to fetch the live spot from gold-api.com. Returns null on
 // any failure so the caller can fall back to Yahoo's last close.
-async function fetchSpot(): Promise<number | null> {
+async function fetchSpotPrimary(): Promise<number | null> {
   try {
     const res = await fetch('https://api.gold-api.com/price/XAU', {
       next: { revalidate: 0 },
       headers: { Accept: 'application/json' },
+      // 2.5s upper bound — gold-api typically responds <500ms.
+      // Capping protects the route's wall-time budget when the
+      // primary is degraded but not fully down.
+      signal: AbortSignal.timeout(2_500),
     })
     if (!res.ok) return null
     const raw = await res.json()
@@ -179,6 +183,45 @@ async function fetchSpot(): Promise<number | null> {
   } catch {
     return null
   }
+}
+
+// [PHASE-12.9] Yahoo XAU=X fallback. Yahoo's XAU=X is forex-style
+// spot gold quote — different upstream from GC=F (futures), so a
+// gold-api outage AND a futures-feed outage are required to take
+// both spot sources down at once.
+//
+// Uses the same `yahooFinance.quote()` API as /api/signals so we
+// don't add a new dependency surface. Returns null on any
+// failure (timeout, missing field, out-of-range).
+async function fetchSpotYahooFallback(): Promise<number | null> {
+  try {
+    const quote = (await yahooFinance.quote('XAUUSD=X')) as unknown as {
+      regularMarketPrice?: number
+    }
+    const n = quote?.regularMarketPrice
+    if (typeof n !== 'number' || !Number.isFinite(n)) return null
+    if (n <= 100 || n > PRICE_MAX) return null
+    return n
+  } catch {
+    return null
+  }
+}
+
+// Spot orchestrator with multi-source failover. Race the primary
+// against the Yahoo fallback so the route doesn't add latency on
+// the typical happy-path (primary wins) but a primary outage
+// completes in the same wall time as the fallback's own fetch.
+//
+// Returns { price, source } so the response's meta.source can
+// reflect which upstream actually replied.
+async function fetchSpot(): Promise<
+  { price: number; source: 'primary' | 'fallback' } | null
+> {
+  const primary = await fetchSpotPrimary()
+  if (primary !== null) return { price: primary, source: 'primary' }
+  const fallback = await fetchSpotYahooFallback()
+  if (fallback !== null) return { price: fallback, source: 'fallback' }
+  return null
 }
 
 export async function GET() {
@@ -190,7 +233,13 @@ export async function GET() {
     fetchRecentCandles(),
   ])
 
-  const spot = spotResult.status === 'fulfilled' ? spotResult.value : null
+  // [PHASE-12.9] Spot result now carries provenance so the
+  // response's meta.source can downgrade to 'partial' when the
+  // primary failed but the Yahoo fallback held the line.
+  const spotPayload =
+    spotResult.status === 'fulfilled' ? spotResult.value : null
+  const spot = spotPayload?.price ?? null
+  const spotSource = spotPayload?.source ?? null
   const candles =
     candlesResult.status === 'fulfilled' ? candlesResult.value : []
 
@@ -261,8 +310,12 @@ export async function GET() {
   // Mark partial when either source was a fallback (gold-api
   // missed but Yahoo gave us spot) — the trader sees the badge
   // even though data is mostly real.
+  // [PHASE-12.9] Spot fallback (Yahoo XAU=X used because gold-api
+  // failed) also degrades meta to 'partial', even when the futures
+  // feed and the rest of the response are clean.
   const fullyLive =
-    spotResult.status === 'fulfilled' && spotResult.value !== null &&
+    spotPayload !== null &&
+    spotSource === 'primary' &&
     candlesResult.status === 'fulfilled' && candles.length > 0
 
   const data: GoldPrice = {
