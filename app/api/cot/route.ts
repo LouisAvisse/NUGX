@@ -38,9 +38,16 @@ interface CotRow {
 
 // 5 years of weekly observations is ~260 rows. We pull a generous
 // 280 to be safe across DST and the rare missing week.
+//
+// [PHASE-12.10] $select restricts the response to ONLY the four
+// columns we actually read. The default Socrata payload includes
+// 100+ columns per row (~9KB each → 2.5MB total), which busts
+// Vercel's 2MB data-cache ceiling. The narrow projection drops
+// the response to ~50KB and lets the route's 12h Next cache work.
 const COT_URL =
   'https://publicreporting.cftc.gov/resource/72hh-3qpy.json' +
   '?contract_market_name=GOLD' +
+  '&$select=report_date_as_yyyy_mm_dd,m_money_positions_long_all,m_money_positions_short_all,nonrept_positions_long_all,nonrept_positions_short_all' +
   '&$order=report_date_as_yyyy_mm_dd%20DESC' +
   '&$limit=280'
 
