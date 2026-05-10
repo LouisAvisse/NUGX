@@ -131,20 +131,7 @@ export const T = {
   chartPatternsSingular: 'MOTIF',
   chartPatternsPlural: 'MOTIFS',
 
-  // Calibration card
-  calibrationOutcomes: 'résultats',
-  calibrationOutcomesNeeded: 'résultats nécessaires',
-  calibrationInsightAllNull: 'Plus de données nécessaires par niveau de confiance.',
-  calibrationInsightHighLow:
-    "⚠ Précision système sous 50% en confiance HAUTE. Revoir les conditions de trade et n'envisager que les setups 8/8 jusqu'à amélioration.",
-  calibrationInsightHighUnderMedium:
-    '⚠ Confiance HAUTE sous-performe MOYENNE — réduire la taille des positions sur les signaux haute confiance.',
-  calibrationInsightOk:
-    'La confiance HAUTE performe comme attendu.',
-  calibrationOnboardingExplainer:
-    'Compare ta confiance déclarée à tes résultats réels — détecte si tu sur-confies tes setups HIGH.',
-  calibrationOnboardingProgress: 'trades enregistrés',
-  calibrationOnboardingPreviewLabel: 'Aperçu — débloqué après 10 trades',
+  // [PHASE-12.11] Calibration copy removed alongside the feature.
 
   // Data-source badge — surfaced in PriceBar when meta.source is
   // 'partial' or 'mock' (F-90). Kept compact so the chip doesn't

@@ -1101,24 +1101,7 @@ export type ThesisWeaknessSignal =
   | 'RSI_EXIT'       // RSI left the band that supports the bias
   | 'EMA20_BREAK'    // price closed past EMA20 against the position
 
-// ─────────────────────────────────────────────────────────────────
-// [SPRINT-1] Confidence calibration
-// Stats that answer "when Claude says HIGH confidence, how often
-// is it right?". Drives a small calibration card in the Copilot
-// footer once enough outcomes have been recorded.
-// ─────────────────────────────────────────────────────────────────
-
-// Per-bucket accuracy. `null` for a bucket means we don't have
-// any outcomes in that band yet (don't render a number that
-// would be 0/0). `isCalibrated` gates whether the UI shows the
-// card at all — below the threshold the sample is too small to
-// be meaningful.
-export interface ConfidenceCalibration {
-  totalRecords: number              // every history record
-  recordsWithOutcome: number        // records with terminal outcome
-  highConfidenceAccuracy: number | null     // 0-100 or null
-  mediumConfidenceAccuracy: number | null
-  lowConfidenceAccuracy: number | null
-  isCalibrated: boolean             // true once recordsWithOutcome >= 10
-  lastUpdated: string               // ISO 8601 — last recompute
-}
+// [PHASE-12.11] ConfidenceCalibration interface removed — the
+// calibration feature was retired. PerformanceSummaryCard +
+// PersonalPatterns cover the "how am I doing?" surface without
+// the confidence-bucket comparison.

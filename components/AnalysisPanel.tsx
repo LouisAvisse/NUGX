@@ -36,12 +36,6 @@ import { useTechnicals } from '@/lib/hooks/useTechnicals'
 import { useThesisHealth } from '@/lib/hooks/useThesisHealth'
 import { useCalendar } from '@/lib/hooks/useCalendar'
 import { useHistory } from '@/lib/hooks/useHistory'
-import { computeCalibration } from '@/lib/calibration'
-import {
-  computeCalibrationLoop,
-  calibrationProvenance,
-  type CalibrationResult,
-} from '@/lib/calibrationLoop'
 import { computeWeightedConfluence } from '@/lib/scoring'
 import { computeRehearsal, type RehearsalStats } from '@/lib/rehearsal'
 import { formatDateTime, parsePrice } from '@/lib/utils'
@@ -63,7 +57,6 @@ import type {
   Bias,
   ChartLevels,
   Confidence,
-  ConfidenceCalibration,
   EntryType,
   MarketCondition,
   Recommendation,
@@ -706,233 +699,7 @@ function parseFirstNumber(s: string | undefined): number | undefined {
   return n > 0 ? n : undefined
 }
 
-// [SPRINT-11] Calibration breakdown — three confidence-level
-// rows + an optional insight line below. Extracted out of the
-// main component to keep the JSX readable.
-function CalibrationRows({
-  calibration,
-}: {
-  calibration: ConfidenceCalibration
-}) {
-  // Per-level palette — same green/amber/red as the main
-  // confidence badge so the UI vocabulary stays consistent.
-  const rows: {
-    label: Confidence
-    accuracy: number | null
-    badge: { bg: string; fg: string }
-    count: number
-  }[] = [
-    {
-      label: 'HIGH',
-      accuracy: calibration.highConfidenceAccuracy,
-      badge: { bg: '#0a1a0a', fg: '#4ade80' },
-      count: 0,
-    },
-    {
-      label: 'MEDIUM',
-      accuracy: calibration.mediumConfidenceAccuracy,
-      badge: { bg: '#1a1500', fg: '#fbbf24' },
-      count: 0,
-    },
-    {
-      label: 'LOW',
-      accuracy: calibration.lowConfidenceAccuracy,
-      badge: { bg: '#1a0a0a', fg: '#f87171' },
-      count: 0,
-    },
-  ]
-
-  const allNull = rows.every((r) => r.accuracy === null)
-
-  return (
-    <>
-      {rows.map((row) => {
-        const fillColor =
-          row.accuracy === null
-            ? '#1e1e1e'
-            : row.accuracy >= 65
-              ? '#4ade80'
-              : row.accuracy >= 50
-                ? '#fbbf24'
-                : '#f87171'
-        return (
-          <div
-            key={row.label}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              marginBottom: '6px',
-            }}
-          >
-            <span
-              style={{
-                background: row.badge.bg,
-                color: row.badge.fg,
-                fontSize: '8px',
-                padding: '2px 6px',
-                width: '60px',
-                textAlign: 'center',
-                letterSpacing: '0.08em',
-              }}
-            >
-              {displayConfidence(row.label)}
-            </span>
-            <div
-              style={{
-                flex: 1,
-                height: '4px',
-                background: '#1e1e1e',
-                borderRadius: '1px',
-              }}
-            >
-              <div
-                style={{
-                  width: row.accuracy === null ? '0%' : `${row.accuracy}%`,
-                  height: '4px',
-                  background: fillColor,
-                  borderRadius: '1px',
-                }}
-              />
-            </div>
-            <span
-              style={{
-                width: '35px',
-                textAlign: 'right',
-                color: row.accuracy === null ? '#333333' : fillColor,
-                fontSize: '10px',
-              }}
-            >
-              {row.accuracy === null ? '——' : `${row.accuracy}%`}
-            </span>
-          </div>
-        )
-      })}
-
-      {/* Calibration insight — branches per the spec, French copy. */}
-      {(() => {
-        const high = calibration.highConfidenceAccuracy
-        const med = calibration.mediumConfidenceAccuracy
-        if (allNull) {
-          return (
-            <div style={{ color: '#333333', fontSize: '9px', marginTop: '8px' }}>
-              {T.calibrationInsightAllNull}
-            </div>
-          )
-        }
-        if (high !== null && high < 50) {
-          return (
-            <div
-              style={{
-                color: '#f87171',
-                fontSize: '9px',
-                marginTop: '8px',
-                lineHeight: 1.4,
-              }}
-            >
-              {T.calibrationInsightHighLow}
-            </div>
-          )
-        }
-        if (high !== null && med !== null && high < med) {
-          return (
-            <div
-              style={{
-                color: '#fbbf24',
-                fontSize: '9px',
-                marginTop: '8px',
-                lineHeight: 1.4,
-              }}
-            >
-              {T.calibrationInsightHighUnderMedium}
-            </div>
-          )
-        }
-        if (high !== null && med !== null && high >= med) {
-          return (
-            <div style={{ color: '#4ade80', fontSize: '9px', marginTop: '8px' }}>
-              {T.calibrationInsightOk}
-            </div>
-          )
-        }
-        return null
-      })()}
-    </>
-  )
-}
-
-// [ONBOARDING] Demo rows for the pre-calibrated state. Same layout
-// as CalibrationRows so the trader sees exactly what they unlock
-// at 10 outcomes — but every row is grayed and the percentages
-// are illustrative ("72%" / "58%" / "44%"). No props: this is
-// purely presentational. We don't reuse CalibrationRows because
-// it pulls live colors based on accuracy bands, and the demo
-// needs to read as inert rather than as a real evaluation.
-function CalibrationDemoRows() {
-  const rows: { label: Confidence; accuracy: number }[] = [
-    { label: 'HIGH', accuracy: 72 },
-    { label: 'MEDIUM', accuracy: 58 },
-    { label: 'LOW', accuracy: 44 },
-  ]
-  return (
-    <>
-      {rows.map((row) => (
-        <div
-          key={row.label}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            marginBottom: '6px',
-            opacity: 0.45,
-          }}
-        >
-          <span
-            style={{
-              background: '#1a1a1a',
-              color: '#666666',
-              fontSize: '8px',
-              padding: '2px 6px',
-              width: '60px',
-              textAlign: 'center',
-              letterSpacing: '0.08em',
-            }}
-          >
-            {displayConfidence(row.label)}
-          </span>
-          <div
-            style={{
-              flex: 1,
-              height: '4px',
-              background: '#1e1e1e',
-              borderRadius: '1px',
-            }}
-          >
-            <div
-              style={{
-                width: `${row.accuracy}%`,
-                height: '4px',
-                background: '#444444',
-                borderRadius: '1px',
-              }}
-            />
-          </div>
-          <span
-            style={{
-              width: '35px',
-              textAlign: 'right',
-              color: '#555555',
-              fontSize: '10px',
-            }}
-          >
-            {row.accuracy}%
-          </span>
-        </div>
-      ))}
-    </>
-  )
-}
-
+// [PHASE-12.11] Calibration helpers (CalibrationRows + CalibrationDemoRows) removed.
 // ─────────────────────────────────────────────────────────────────
 // Main component
 // ─────────────────────────────────────────────────────────────────
@@ -1023,19 +790,6 @@ export default function AnalysisPanel({
     onLevelsUpdate,
   ])
 
-  // [SPRINT-11] Confidence calibration. Recomputed on mount,
-  // whenever a fresh analysis lands (data?.generatedAt changes),
-  // and whenever history mutates (the historyUpdated event fires
-  // through useHistory which we already subscribe to). The
-  // calibration card only renders fully when isCalibrated is true
-  // (>= 10 decided outcomes).
-  const [calibration, setCalibration] = useState<ConfidenceCalibration | null>(
-    null
-  )
-  useEffect(() => {
-    setCalibration(computeCalibration())
-  }, [data?.generatedAt, history.history])
-
   // [PHASE-6] Rehearsal stats — pulled from history every time
   // the active analysis changes or new outcomes resolve. Pure
   // derivation, no network. computeRehearsal returns NONE when
@@ -1050,29 +804,6 @@ export default function AnalysisPanel({
     const session = getCurrentSession().name
     setRehearsal(computeRehearsal(data, session))
   }, [data, history.history])
-
-  // [PHASE-10] Calibration loop — recompute personalized weights
-  // from the trader's outcome history every time history mutates.
-  // While the sample is small the result is { calibrated: false,
-  // weights: DEFAULT_WEIGHTS } so the score block renders
-  // identically to Phase 2. Once the threshold is crossed, the
-  // weighted score is RECOMPUTED on the client with the derived
-  // weights for display only — server-side history records keep
-  // the canonical default-weighted score so calibration stays a
-  // pure function over deterministic inputs.
-  const [calibrationLoop, setCalibrationLoop] = useState<CalibrationResult | null>(
-    null
-  )
-  useEffect(() => {
-    setCalibrationLoop(computeCalibrationLoop())
-  }, [history.history])
-  const calibratedWC =
-    data && calibrationLoop && calibrationLoop.calibrated
-      ? computeWeightedConfluence(data.signals, calibrationLoop.weights)
-      : null
-  const calibProvenance = calibrationLoop
-    ? calibrationProvenance(calibrationLoop)
-    : null
 
   // [SPRINT-5] Persist each successful analysis to localStorage
   // history. Keyed off generatedAt so we save once per unique
@@ -1949,11 +1680,9 @@ export default function AnalysisPanel({
             <Skeleton width={48} height={12} />
           ) : data && !showError ? (
             (() => {
-              // [PHASE-2/10] Prefer the calibrated weighted score
-              // when calibrationLoop is active; fall back to the
-              // server-computed default-weighted score; finally
-              // fall back to the legacy "N/8" for old records.
-              const wc = calibratedWC ?? data.weightedConfluence
+              // [PHASE-2] Use the server-computed default-weighted
+              // score; fall back to the legacy "N/8" for old records.
+              const wc = data.weightedConfluence
               const display = wc
                 ? `${wc.score.toFixed(1)}/${wc.max.toFixed(0)}`
                 : `${data.confluenceScore}/${data.confluenceTotal}`
@@ -1976,30 +1705,6 @@ export default function AnalysisPanel({
             <span style={{ color: '#666666', fontSize: '12px' }}>——</span>
           )}
         </div>
-
-        {/* [PHASE-10] Calibration provenance line — shows whether
-            the displayed weighted score was computed with the
-            trader's personally-calibrated weights or with system
-            defaults. Hidden until calibrationLoop has produced
-            a meaningful state. */}
-        {!showSkeleton && !showError && calibProvenance ? (
-          <Tooltip
-            position="left"
-            content="Le copilote ajuste automatiquement les pondérations des 8 signaux à votre historique personnel, dès que vous avez 30 résultats résolus. Avant ce seuil, les pondérations par défaut s'appliquent — l'apprentissage commence dès la première analyse."
-          >
-            <div
-              style={{
-                marginTop: '4px',
-                color: '#555555',
-                fontSize: '8px',
-                letterSpacing: '0.06em',
-                fontStyle: 'italic',
-              }}
-            >
-              {calibProvenance}
-            </div>
-          </Tooltip>
-        ) : null}
 
         {/* [PHASE-2] Score bar. 10 cells when weighted score is
             present (one per integer point of the weighted total),
@@ -2172,128 +1877,21 @@ export default function AnalysisPanel({
         )}
       </div>
 
-      {/* [SPRINT-11] Calibration card — accuracy by confidence level.
-          Below 10 decided outcomes: shows a progress bar so the
-          trader knows how many more analyses they need.
-          At ≥10 outcomes: three rows (HIGH/MEDIUM/LOW) with
-          accuracy bars + an insight line under them. The card
-          slots between the catalyst block and the action button
-          per the SPRINT-11 spec. */}
-      {calibration && (
-        <div
-          data-section="calibration"
-          style={{
-            padding: '8px 12px',
-            borderTop: '1px solid #222222',
-            borderBottom: '1px solid #222222',
-          }}
-        >
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              marginBottom: '8px',
-            }}
-          >
-            <Tooltip
-              position="left"
-              content="Précision historique des niveaux de confiance du système sur vos trades. La confiance HAUTE devrait être plus souvent correcte que MOYENNE. Sinon, ajuster votre stratégie en conséquence. Nécessite au moins 10 résultats de trades clôturés."
-            >
-              <span
-                style={{
-                  color: '#888888',
-                  fontSize: '9px',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.12em',
-                }}
-              >
-                CALIBRATION
-              </span>
-            </Tooltip>
-            <span style={{ color: '#444444', fontSize: '9px' }}>
-              {calibration.recordsWithOutcome} {T.calibrationOutcomes}
-            </span>
-          </div>
-
-          {/* [PHASE-12.6] Performance summary card — sits inside the
-              calibration block so all "trader stats" surfaces are
-              visually grouped. Self-hides under 3 closed trades. */}
-          <PerformanceSummaryCard />
-
-          {!calibration.isCalibrated ? (
-            // [ONBOARDING] Not yet calibrated. Pre-10-outcome state
-            // used to be near-invisible (a 2px bar + "3/10 résultats
-            // nécessaires"); testers reported they didn't know what
-            // calibration was for. Now we surface:
-            //   • a one-line explainer of the value
-            //   • a clearer 4px progress bar with the trade count
-            //   • a muted demo preview so the user can see what
-            //     unlocks at 10 outcomes
-            <>
-              <div
-                style={{
-                  color: '#888888',
-                  fontSize: '9px',
-                  lineHeight: 1.4,
-                  marginBottom: '8px',
-                }}
-              >
-                {T.calibrationOnboardingExplainer}
-              </div>
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'baseline',
-                  marginBottom: '4px',
-                }}
-              >
-                <span style={{ color: '#888888', fontSize: '9px' }}>
-                  {calibration.recordsWithOutcome} / 10{' '}
-                  {T.calibrationOnboardingProgress}
-                </span>
-                <span style={{ color: '#444444', fontSize: '9px' }}>
-                  {Math.round(
-                    (calibration.recordsWithOutcome / 10) * 100
-                  )}
-                  %
-                </span>
-              </div>
-              <div
-                style={{
-                  height: '4px',
-                  background: '#1e1e1e',
-                  borderRadius: '2px',
-                  marginBottom: '12px',
-                }}
-              >
-                <div
-                  style={{
-                    width: `${Math.min(100, (calibration.recordsWithOutcome / 10) * 100)}%`,
-                    height: '4px',
-                    background: '#666666',
-                    borderRadius: '2px',
-                  }}
-                />
-              </div>
-              <CalibrationDemoRows />
-              <div
-                style={{
-                  color: '#444444',
-                  fontSize: '9px',
-                  marginTop: '6px',
-                  letterSpacing: '0.04em',
-                }}
-              >
-                {T.calibrationOnboardingPreviewLabel}
-              </div>
-            </>
-          ) : (
-            <CalibrationRows calibration={calibration} />
-          )}
-        </div>
-      )}
+      {/* [PHASE-12.11] Calibration card removed — confidence calibration
+          UI was deleted at user request. PerformanceSummaryCard moved
+          out of the calibration container so it stands on its own as
+          a "trader stats" surface independent of confidence-bucket
+          comparison. */}
+      <div
+        data-section="performance"
+        style={{
+          padding: '8px 12px',
+          borderTop: '1px solid #222222',
+          borderBottom: '1px solid #222222',
+        }}
+      >
+        <PerformanceSummaryCard />
+      </div>
 
       {/* 7. Action button — primary CTA for the dashboard.
             Four states:
