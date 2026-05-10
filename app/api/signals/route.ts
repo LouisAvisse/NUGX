@@ -71,17 +71,25 @@ async function fetchTickerOptional(
 
 export async function GET() {
   try {
-    // [PHASE-8] All six fetches in parallel. Two REQUIRED
-    // (dxy + us10y) and four OPTIONAL (vix, jpy, oil, btc).
-    // Optional failures don't take down the route; they drop to
-    // null and the UI hides the corresponding row.
-    const [dxy, us10y, vix, jpy, oil, btc] = await Promise.all([
-      fetchTicker('DX-Y.NYB'),       // required: US Dollar Index
-      fetchTicker('^TNX'),           // required: CBOE 10Y yield
-      fetchTickerOptional('^VIX'),   // optional: risk-off proxy
-      fetchTickerOptional('JPY=X'),  // optional: USD/JPY safe-haven
-      fetchTickerOptional('CL=F'),   // optional: WTI front-month
-      fetchTickerOptional('BTC-USD'),// optional: risk-on proxy
+    // [PHASE-8] / [PHASE-12.2] All ten fetches in parallel. Two
+    // REQUIRED (dxy + us10y) and eight OPTIONAL (vix, jpy, oil,
+    // btc, xag, eur, chf, spx). Optional failures don't take down
+    // the route; they drop to null and the UI hides the row.
+    //
+    // The new signals (XAG / EUR / CHF / SPX) are the cross-asset
+    // tells real gold desks watch — see MarketSignals type comments
+    // for why each one is a useful confluence input.
+    const [dxy, us10y, vix, jpy, oil, btc, xag, eur, chf, spx] = await Promise.all([
+      fetchTicker('DX-Y.NYB'),         // required: US Dollar Index
+      fetchTicker('^TNX'),             // required: CBOE 10Y yield
+      fetchTickerOptional('^VIX'),     // optional: risk-off proxy
+      fetchTickerOptional('JPY=X'),    // optional: USD/JPY safe-haven cross
+      fetchTickerOptional('CL=F'),     // optional: WTI front-month
+      fetchTickerOptional('BTC-USD'),  // optional: risk-on / digital-gold proxy
+      fetchTickerOptional('SI=F'),     // optional: Silver futures (Gold-Silver Ratio)
+      fetchTickerOptional('EURUSD=X'), // optional: EUR/USD — true USD direction
+      fetchTickerOptional('CHF=X'),    // optional: USD/CHF — safe-haven currency
+      fetchTickerOptional('^GSPC'),    // optional: S&P 500 — risk-on/off gauge
     ])
 
     const data: MarketSignals = { dxy, us10y }
@@ -89,6 +97,10 @@ export async function GET() {
     if (jpy) data.jpy = jpy
     if (oil) data.oil = oil
     if (btc) data.btc = btc
+    if (xag) data.xag = xag
+    if (eur) data.eur = eur
+    if (chf) data.chf = chf
+    if (spx) data.spx = spx
     return NextResponse.json(data)
   } catch (err) {
     // [SECURITY L1] Log the message only — full SDK errors leak

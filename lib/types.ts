@@ -54,8 +54,11 @@ export interface SignalItem {
 // Bundled macro signals payload from /api/signals.
 //
 // [PHASE-8] Expanded beyond DXY + US10Y so the trader sees the
-// full risk-asset complex. Each new signal contributes a piece
-// of context that gold actively responds to:
+// full risk-asset complex.
+// [PHASE-12.2] Further expanded with the cross-asset tells real
+// gold desks watch: silver (gold-silver ratio), EUR/USD (the
+// dominant DXY component), USD/CHF (the safe-haven cross), and
+// SPX (risk-on/off broad gauge).
 //
 //   vix   — equity volatility / risk-off proxy. High VIX often
 //           coincides with gold strength (safe-haven flow).
@@ -66,6 +69,16 @@ export interface SignalItem {
 //   btc   — risk-on / digital-gold proxy. Strong correlation
 //           swings make BTC a useful "is this a real safe-haven
 //           bid?" check.
+//   xag   — silver spot/futures. Gold-silver ratio (XAU/XAG) is
+//           the headline precious-metals tell — pros watch it
+//           for confirmation of real metal demand vs. flight-to-
+//           safety positioning.
+//   eur   — EUR/USD. DXY is 57% EUR; EUR/USD direction is the
+//           true dollar move on most sessions.
+//   chf   — USD/CHF. CHF is THE safe-haven currency; weakening
+//           USD/CHF tracks gold safe-haven bids.
+//   spx   — S&P 500. Risk-on/off broad gauge. Sustained equity
+//           weakness with rising gold = classic risk-off rotation.
 //
 // All optional so older clients (and outage fallbacks) still
 // validate. SignalsPanel renders rows only for fields present.
@@ -76,6 +89,62 @@ export interface MarketSignals {
   jpy?: SignalItem    // USD/JPY — safe-haven currency proxy
   oil?: SignalItem    // WTI crude front-month — commodity macro
   btc?: SignalItem    // Bitcoin USD — risk-on / digital-gold proxy
+  xag?: SignalItem    // Silver spot — feeds the Gold-Silver Ratio
+  eur?: SignalItem    // EUR/USD — true USD direction (DXY 57% EUR)
+  chf?: SignalItem    // USD/CHF — safe-haven currency cross
+  spx?: SignalItem    // S&P 500 — risk-on/off broad gauge
+}
+
+// ─────────────────────────────────────────────────────────────────
+// [PHASE-12.2] Macro yields & inflation
+// Returned by /api/macro; consumed by useMacro + SignalsPanel.
+//
+// Gold is structurally a real-yield asset. Nominal 10Y is a proxy
+// at best — what actually moves gold is the 10Y TIPS yield and the
+// 10Y breakeven inflation expectation. Both are pulled from FRED
+// (DFII10 and T10YIE) which serves a free public CSV without
+// requiring an API key.
+// ─────────────────────────────────────────────────────────────────
+
+// One macro yield-or-rate datapoint. Same shape across the various
+// FRED series so the route can fan out and return a single bundle.
+export interface MacroYieldItem {
+  value: number       // latest observation (in % for yields, etc.)
+  change: number      // change vs. previous observation
+  changePct: number   // percent change vs. previous observation
+  observedAt: string  // ISO 8601 — date of latest observation (FRED is daily)
+}
+
+// Bundled macro-yield payload from /api/macro.
+//
+// All optional so the route never goes blank if one FRED endpoint
+// is slow; the client renders rows only for fields present.
+export interface MacroYields {
+  realYield10y?: MacroYieldItem    // DFII10 — 10Y TIPS yield (real yield)
+  breakeven10y?: MacroYieldItem    // T10YIE — 10Y breakeven inflation expectation
+  realYield5y?: MacroYieldItem     // DFII5 — 5Y TIPS yield (optional)
+  fwdInflation5y5y?: MacroYieldItem // T5YIFR — 5Y5Y forward inflation expectation
+  meta?: ResponseMeta              // 'live' / 'partial' / 'mock'
+}
+
+// ─────────────────────────────────────────────────────────────────
+// [PHASE-12.2] CFTC Commitments of Traders (COT)
+// Weekly Managed-Money positioning in COMEX gold futures. Free
+// from CFTC's Socrata API (publicreporting.cftc.gov/resource/...).
+// Headline number every desk watches: Managed Money net long.
+// ─────────────────────────────────────────────────────────────────
+
+// One weekly COT observation. Net = long − short ; the 5y percentile
+// gives "how extreme is positioning right now" at a glance.
+export interface CotPositioning {
+  reportDate: string             // ISO 8601 — Tuesday of the COT week
+  managedMoneyLong: number       // contracts (one-thousands of oz × 100)
+  managedMoneyShort: number
+  managedMoneyNet: number        // long − short
+  netPercentile5y: number        // 0..100 — where today's net sits in 5y history
+  nonReportableNet: number | null // small specs net (contrarian indicator)
+  weekOverWeekChange: number     // change in net contracts vs. last week
+  meta?: ResponseMeta
 }
 
 // ─────────────────────────────────────────────────────────────────
