@@ -1575,6 +1575,55 @@ export default function AnalysisPanel({
           </div>
         </div>
 
+        {/* [TARGET-REACH] Target reachability sub-line.
+            Shows the target distance from entry in two units:
+              • % of price — intuitive "how far"
+              • × ATR(14)  — exposes whether the target is stretched
+                relative to recent volatility (the calibration users
+                actually care about — beyond 2× ATR is a fantasy
+                target on intraday timeframes).
+            Hidden during skeleton/error or when we don't have
+            both an entry, target, and ATR to compute against. */}
+        {(() => {
+          if (showSkeleton || showError || !data) return null
+          const entryNum = parseFirstNumber(data.entry)
+          const targetNum = parseFirstNumber(data.target)
+          const atrNum = technicals.indicators?.atr
+          if (!entryNum || !targetNum || !atrNum || atrNum <= 0) return null
+          const distance = Math.abs(targetNum - entryNum)
+          const pctOfPrice = (distance / entryNum) * 100
+          const atrMult = distance / atrNum
+          // Color the ATR multiple — green if reachable (≤2×), amber
+          // 2-2.5×, red beyond. Mirrors the rule we now give Claude.
+          const atrColor =
+            atrMult <= 2 ? '#4ade80' : atrMult <= 2.5 ? '#fbbf24' : '#f87171'
+          return (
+            <div
+              data-field="target-reach"
+              style={{
+                marginTop: '6px',
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'baseline',
+              }}
+            >
+              <Tooltip
+                position="left"
+                content="Distance jusqu'à l'objectif, exprimée en % du prix d'entrée et en multiple d'ATR(14). Au-delà de 2× ATR, l'objectif est rarement atteint sur la durée de détention indiquée — méfiance."
+              >
+                <span style={labelStyle}>OBJECTIF</span>
+              </Tooltip>{' '}
+              <span style={{ fontSize: '11px', color: '#b0b0b0' }}>
+                {pctOfPrice >= 0.005 ? `+${pctOfPrice.toFixed(2)}%` : '—'}
+                <span style={{ color: '#444444', margin: '0 6px' }}>•</span>
+                <span style={{ color: atrColor, fontWeight: 500 }}>
+                  {atrMult.toFixed(1)}× ATR
+                </span>
+              </span>
+            </div>
+          )
+        })()}
+
         {/* INVALIDATION row — full width. */}
         <div
           data-field="invalidation"

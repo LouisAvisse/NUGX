@@ -253,8 +253,11 @@ ENTRY / STOP / TARGET RULES:
 - LONG entry: pullback to EMA20 or support — never at session highs.
 - SHORT entry: bounce to EMA20 or resistance — never at session lows.
 - Stop: always beyond a structural level (swing high/low, or ATR buffer of 1-1.5x).
-- Target: next structural level (swing high/low, round number, BB band).
-- Risk/reward must be at least 1:2. If you cannot achieve it, recommend FLAT.
+- Target — REACHABILITY OVER REWARD. Pick the FIRST structural level price has a credible chance to reach in the stated holdTime. Hard ceilings:
+    * Target distance from entry MUST be ≤ 2× ATR(14). Anything beyond is a fantasy on intraday timeframes.
+    * For a 1-3h hold, do NOT exceed 2× ATR. For 4-8h, you may extend toward 2.5× ATR if a clear structural level sits there.
+    * If the next genuine structural level is more than 2.5× ATR away, recommend FLAT instead of reaching. A "missed" trade is fine; a fake target burns trader trust.
+- Risk/reward must still be at least 1:2 — but achieve it by tightening the stop to a real structural level, NOT by stretching the target. If you cannot get 1:2 with a reachable target, recommend FLAT.
 
 SCENARIO BRANCHING:
 When the setup is genuinely binary — a clear pivot price where
@@ -536,7 +539,11 @@ function buildMockAnalysis(req: AnalysisRequest): AnalysisResult {
   const entryLow = isBullish ? p - atr * 0.5 : p + atr * 0.3
   const entryHigh = isBullish ? p - atr * 0.2 : p + atr * 0.6
   const stop = isBullish ? p - atr * 1.5 : p + atr * 1.5
-  const target = isBullish ? p + atr * 3 : p - atr * 3
+  // [TARGET-REACH] Mock target capped at 2× ATR (was 3×). With entry
+  // offset ~0.35× ATR from price and stop at 1.5×, this lands the
+  // implied R/R near the 1:2 floor — matching the stricter
+  // reachability rule we now give Claude.
+  const target = isBullish ? p + atr * 2 : p - atr * 2
   const support = isBullish ? p - atr * 0.5 : p - atr * 1.2
   const resistance = isBullish ? p + atr * 1.2 : p + atr * 0.5
   const invalidation = isBullish ? req.ema50 || p - atr * 2 : req.ema50 || p + atr * 2
