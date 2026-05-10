@@ -97,6 +97,42 @@ export interface WeightedConfluence {
 }
 
 // ─────────────────────────────────────────────────────────────────
+// [PHASE-12.1] Actionable trade thresholds — single source of truth.
+//
+// The legacy LLM rule was "5 of 8 signals BULLISH/BEARISH" — a raw
+// count. The UI now displays the weighted 0–10 score, and the mock
+// builder gates trades at weighted ≥5.0 (commit 7ae9691). These two
+// thresholds were drifting apart: a 4-raw / 6.0-weighted snapshot
+// could read FLAT in the LLM and "strong LONG" in the panel.
+//
+// These constants reconcile the rule. Both routes (live + mock) and
+// the system prompt now reference them; any future tweak lands in
+// one place.
+//
+//   ACTIONABLE_FLOOR — minimum weighted score on the dominant side
+//                      for a non-FLAT recommendation. 5.0/10 is the
+//                      conservative midpoint that caught the recent
+//                      audit's mismatch case.
+//
+//   DOMINANCE_LEAD   — minimum gap between dominant and opposing
+//                      weighted totals. 2.0 prevents split-decision
+//                      LONG/SHORT (e.g. 5.1 vs 4.9). Real conviction
+//                      requires the macro+tape signals to point the
+//                      same way, not a one-signal coin flip.
+// ─────────────────────────────────────────────────────────────────
+export const ACTIONABLE_FLOOR = 5.0
+export const DOMINANCE_LEAD = 2.0
+
+// Convenience: returns true when the weighted confluence clears
+// both gates. Used by /api/analyze server-side reconciliation
+// and the mock builder so they cannot disagree.
+export function isActionable(wc: WeightedConfluence): boolean {
+  if (wc.dominant === 'NEUTRAL') return false
+  const lead = Math.abs(wc.bullishWeight - wc.bearishWeight)
+  return wc.score >= ACTIONABLE_FLOOR && lead >= DOMINANCE_LEAD
+}
+
+// ─────────────────────────────────────────────────────────────────
 // Compute the weighted score from a SignalBreakdown.
 //
 // Each signal contributes its full weight to BULLISH or BEARISH

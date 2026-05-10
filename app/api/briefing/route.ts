@@ -21,6 +21,10 @@ const client = new Anthropic({
   timeout: 30_000,
 })
 
+// [PHASE-12.1] Model pin — same Sonnet 4.6 tier as the analyzer so
+// briefing prose quality matches the rest of the surface.
+const BRIEFING_MODEL = 'claude-sonnet-4-6'
+
 // ─────────────────────────────────────────────────────────────────
 // [SECURITY M3 / L2] Untrusted-input hardening — same shape as
 // /api/analyze. ForexFactory event titles and Google News headlines
@@ -202,10 +206,21 @@ ${body.topHeadlines.length > 0 ? body.topHeadlines.map((h, i) => `${i + 1}. ${h}
 
 Generate the session briefing now.`
 
+    // [PHASE-12.1] Prompt caching on the persona block. The London
+    // briefing fires once a day, so the cache rarely warms — but
+    // when the user manually re-generates within the 5-min TTL
+    // (e.g. testing a config change) the second call bills the
+    // system prompt at cache-read rates.
     const message = await client.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      model: BRIEFING_MODEL,
       max_tokens: 800,
-      system: SYSTEM_PROMPT,
+      system: [
+        {
+          type: 'text',
+          text: SYSTEM_PROMPT,
+          cache_control: { type: 'ephemeral' },
+        },
+      ],
       messages: [{ role: 'user', content: userMessage }],
     })
 
