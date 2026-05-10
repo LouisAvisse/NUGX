@@ -858,6 +858,78 @@ function CalibrationRows({
   )
 }
 
+// [ONBOARDING] Demo rows for the pre-calibrated state. Same layout
+// as CalibrationRows so the trader sees exactly what they unlock
+// at 10 outcomes — but every row is grayed and the percentages
+// are illustrative ("72%" / "58%" / "44%"). No props: this is
+// purely presentational. We don't reuse CalibrationRows because
+// it pulls live colors based on accuracy bands, and the demo
+// needs to read as inert rather than as a real evaluation.
+function CalibrationDemoRows() {
+  const rows: { label: Confidence; accuracy: number }[] = [
+    { label: 'HIGH', accuracy: 72 },
+    { label: 'MEDIUM', accuracy: 58 },
+    { label: 'LOW', accuracy: 44 },
+  ]
+  return (
+    <>
+      {rows.map((row) => (
+        <div
+          key={row.label}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            marginBottom: '6px',
+            opacity: 0.45,
+          }}
+        >
+          <span
+            style={{
+              background: '#1a1a1a',
+              color: '#666666',
+              fontSize: '8px',
+              padding: '2px 6px',
+              width: '60px',
+              textAlign: 'center',
+              letterSpacing: '0.08em',
+            }}
+          >
+            {displayConfidence(row.label)}
+          </span>
+          <div
+            style={{
+              flex: 1,
+              height: '4px',
+              background: '#1e1e1e',
+              borderRadius: '1px',
+            }}
+          >
+            <div
+              style={{
+                width: `${row.accuracy}%`,
+                height: '4px',
+                background: '#444444',
+                borderRadius: '1px',
+              }}
+            />
+          </div>
+          <span
+            style={{
+              width: '35px',
+              textAlign: 'right',
+              color: '#555555',
+              fontSize: '10px',
+            }}
+          >
+            {row.accuracy}%
+          </span>
+        </div>
+      ))}
+    </>
+  )
+}
+
 // ─────────────────────────────────────────────────────────────────
 // Main component
 // ─────────────────────────────────────────────────────────────────
@@ -1600,11 +1672,26 @@ export default function AnalysisPanel({
           }}
         >
           <div data-field="rr">
+            {/* [DISCOVERABILITY] Tooltip on the label was invisible
+                until hover. The ⓘ glyph signals there's an
+                explanation behind the term — testers asked what
+                R/R meant and never hovered. */}
             <Tooltip
               position="left"
-              content="Ratio risque/récompense — combien on gagne pour chaque dollar risqué. 1:2 = on risque $1 pour gagner $2. Vert si ≥ 1:2, ambre si ≥ 1:1.5, rouge si moins. Le copilote ne recommande que des trades avec R/R minimum 1:2."
+              content="Ratio risque/récompense — combien on gagne pour chaque dollar risqué. 1:2 = on risque $1 pour gagner $2. Vert si ≥ 1:2, ambre si ≥ 1:1.5, rouge si moins. Le copilote ne recommande que des trades avec R/R minimum 1:2 (règle parfois appelée 2/3 ou 2:1)."
             >
-              <span style={labelStyle}>R/R</span>
+              <span style={labelStyle}>
+                R/R{' '}
+                <span
+                  style={{
+                    color: '#666666',
+                    fontSize: '8px',
+                    verticalAlign: 'super',
+                  }}
+                >
+                  ⓘ
+                </span>
+              </span>
             </Tooltip>{' '}
             {showSkeleton ? (
               <span style={{ display: 'inline-block', verticalAlign: 'middle' }}>
@@ -2110,26 +2197,71 @@ export default function AnalysisPanel({
           </div>
 
           {!calibration.isCalibrated ? (
-            // Not yet calibrated — show progress toward 10 outcomes.
+            // [ONBOARDING] Not yet calibrated. Pre-10-outcome state
+            // used to be near-invisible (a 2px bar + "3/10 résultats
+            // nécessaires"); testers reported they didn't know what
+            // calibration was for. Now we surface:
+            //   • a one-line explainer of the value
+            //   • a clearer 4px progress bar with the trade count
+            //   • a muted demo preview so the user can see what
+            //     unlocks at 10 outcomes
             <>
-              <div style={{ color: '#444444', fontSize: '9px', marginBottom: '4px' }}>
-                {calibration.recordsWithOutcome}/10 {T.calibrationOutcomesNeeded}
+              <div
+                style={{
+                  color: '#888888',
+                  fontSize: '9px',
+                  lineHeight: 1.4,
+                  marginBottom: '8px',
+                }}
+              >
+                {T.calibrationOnboardingExplainer}
               </div>
               <div
                 style={{
-                  height: '2px',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'baseline',
+                  marginBottom: '4px',
+                }}
+              >
+                <span style={{ color: '#888888', fontSize: '9px' }}>
+                  {calibration.recordsWithOutcome} / 10{' '}
+                  {T.calibrationOnboardingProgress}
+                </span>
+                <span style={{ color: '#444444', fontSize: '9px' }}>
+                  {Math.round(
+                    (calibration.recordsWithOutcome / 10) * 100
+                  )}
+                  %
+                </span>
+              </div>
+              <div
+                style={{
+                  height: '4px',
                   background: '#1e1e1e',
-                  borderRadius: '1px',
+                  borderRadius: '2px',
+                  marginBottom: '12px',
                 }}
               >
                 <div
                   style={{
                     width: `${Math.min(100, (calibration.recordsWithOutcome / 10) * 100)}%`,
-                    height: '2px',
-                    background: '#444444',
-                    borderRadius: '1px',
+                    height: '4px',
+                    background: '#666666',
+                    borderRadius: '2px',
                   }}
                 />
+              </div>
+              <CalibrationDemoRows />
+              <div
+                style={{
+                  color: '#444444',
+                  fontSize: '9px',
+                  marginTop: '6px',
+                  letterSpacing: '0.04em',
+                }}
+              >
+                {T.calibrationOnboardingPreviewLabel}
               </div>
             </>
           ) : (

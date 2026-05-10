@@ -141,6 +141,10 @@ export const T = {
     '⚠ Confiance HAUTE sous-performe MOYENNE — réduire la taille des positions sur les signaux haute confiance.',
   calibrationInsightOk:
     'La confiance HAUTE performe comme attendu.',
+  calibrationOnboardingExplainer:
+    'Compare ta confiance déclarée à tes résultats réels — détecte si tu sur-confies tes setups HIGH.',
+  calibrationOnboardingProgress: 'trades enregistrés',
+  calibrationOnboardingPreviewLabel: 'Aperçu — débloqué après 10 trades',
 
   // Data-source badge — surfaced in PriceBar when meta.source is
   // 'partial' or 'mock' (F-90). Kept compact so the chip doesn't
