@@ -39,6 +39,9 @@ import {
 import { EMA, RSI, MACD } from 'technicalindicators'
 import { computeIndicators } from '@/lib/technicals'
 import { detectPatterns, dedupePatterns } from '@/lib/patterns'
+import { computeDailyPivots } from '@/lib/pivots'
+import { computeSessionVwaps } from '@/lib/vwap'
+import { computeAtrSummary } from '@/lib/atrPercentile'
 import type {
   ChartCandle,
   ChartLinePoint,
@@ -458,6 +461,21 @@ export async function GET() {
     ]
     const patterns = dedupePatterns(allPatterns)
 
+    // [PHASE-12.3] Pivots — derived from the prior UTC day's
+    // candles inside the 1H history. Returns null when history
+    // doesn't span yesterday (e.g. cold-cache, short fetch).
+    const pivots = computeDailyPivots(candles1h)
+
+    // [PHASE-12.3] Anchored VWAPs from London + NY opens, using
+    // the 15M bundle's volume + typical-price weighting. Both are
+    // returned unconditionally; an unactivated anchor (e.g. NY
+    // open before 13:00 UTC) ships an empty series and 0 latest.
+    const sessionVwaps = computeSessionVwaps(r15.candles)
+
+    // [PHASE-12.3] ATR percentile vs the prior 90d. Drives the
+    // volatility-regime chip in SignalsPanel.
+    const atrSummary = computeAtrSummary(candles1h)
+
     const response: TechnicalsResponse = {
       indicators,
       chart,
@@ -465,6 +483,9 @@ export async function GET() {
       tf1h,
       tf4h,
       patterns,
+      pivots,
+      sessionVwaps,
+      atrSummary,
     }
     return NextResponse.json(response)
   } catch (err) {

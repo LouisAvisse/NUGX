@@ -324,7 +324,10 @@ export default function Page() {
             order: isStacked ? 1 : 0,
           }}
         >
-          <TradingViewChart levels={chartLevels} />
+          <TradingViewChart
+            levels={chartLevels}
+            livePrice={goldPrice.data?.price}
+          />
         </div>
 
         {/* RIGHT drawer — Copilot AnalysisPanel. */}

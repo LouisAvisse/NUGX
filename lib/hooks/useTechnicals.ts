@@ -29,9 +29,12 @@
 
 import { useState, useEffect } from 'react'
 import type {
+  AtrSummaryPayload,
   ChartCandle,
   ChartLinePoint,
+  DailyPivotsSummary,
   DetectedPattern,
+  SessionVwapsSummary,
   TechnicalIndicators,
   TechnicalsResponse,
   TimeframeCandles,
@@ -57,6 +60,13 @@ interface UseTechnicalsReturn {
   // `.filter` without a null check.
   patterns: DetectedPattern[]
 
+  // [PHASE-12.3] Daily pivots, anchored VWAPs, ATR regime. All
+  // null when the route hasn't responded yet or history is too
+  // short. Consumers render rows only when present.
+  pivots: DailyPivotsSummary | null
+  sessionVwaps: SessionVwapsSummary | null
+  atrSummary: AtrSummaryPayload | null
+
   loading: boolean
   error: string | null
   lastUpdated: Date | null
@@ -72,6 +82,13 @@ export function useTechnicals(): UseTechnicalsReturn {
   const [tf1h, setTf1h] = useState<TimeframeCandles | null>(null)
   const [tf4h, setTf4h] = useState<TimeframeCandles | null>(null)
   const [patterns, setPatterns] = useState<DetectedPattern[]>([])
+  // [PHASE-12.3] Pivots / VWAPs / ATR regime. Null until first
+  // successful response.
+  const [pivots, setPivots] = useState<DailyPivotsSummary | null>(null)
+  const [sessionVwaps, setSessionVwaps] = useState<SessionVwapsSummary | null>(
+    null
+  )
+  const [atrSummary, setAtrSummary] = useState<AtrSummaryPayload | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
@@ -93,6 +110,10 @@ export function useTechnicals(): UseTechnicalsReturn {
       setTf1h(json.tf1h ?? null)
       setTf4h(json.tf4h ?? null)
       setPatterns(json.patterns ?? [])
+      // [PHASE-12.3] Optional summaries — defensive defaults.
+      setPivots(json.pivots ?? null)
+      setSessionVwaps(json.sessionVwaps ?? null)
+      setAtrSummary(json.atrSummary ?? null)
       setLastUpdated(new Date())
       setError(null)
     } catch {
@@ -118,6 +139,9 @@ export function useTechnicals(): UseTechnicalsReturn {
     tf1h,
     tf4h,
     patterns,
+    pivots,
+    sessionVwaps,
+    atrSummary,
     loading,
     error,
     lastUpdated,

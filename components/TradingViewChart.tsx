@@ -71,6 +71,12 @@ import type {
 
 interface GoldChartProps {
   levels?: ChartLevels
+  // [PHASE-12.3] Live spot price — updates every ~30s via the
+  // useGoldPrice hook in page.tsx. Drawn as a thin horizontal
+  // overlay on the candle series so a scalper can see where
+  // price is RIGHT NOW vs. the most recent closed candle (which
+  // can lag by up to a minute on the slower timeframes).
+  livePrice?: number
 }
 
 // 5-minute TradingView iframe — live ticker beneath the main
@@ -145,7 +151,7 @@ function trendColor(trend: string | undefined): string {
   return '#888888'
 }
 
-export default function GoldChart({ levels }: GoldChartProps) {
+export default function GoldChart({ levels, livePrice }: GoldChartProps) {
   const technicals = useTechnicals()
 
   // Active timeframe — drives candle / EMA / marker data.
@@ -177,6 +183,10 @@ export default function GoldChart({ levels }: GoldChartProps) {
   const ema200Ref = useRef<ISeriesApi<'Line'> | null>(null)
   const priceLinesRef = useRef<IPriceLine[]>([])
   const markersRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null)
+  // [PHASE-12.3] Single price line bound to the live price prop.
+  // Held outside priceLinesRef so the AI-levels effect below can
+  // clear/redraw without disturbing the live overlay.
+  const livePriceLineRef = useRef<IPriceLine | null>(null)
 
   // Tracks which timeframe was most recently auto-framed via
   // fitContent(). When this differs from the active TF the data
@@ -555,6 +565,69 @@ export default function GoldChart({ levels }: GoldChartProps) {
     addLine(levels.swingHigh, COLOR_SWING, LINE_STYLE_DOTTED, '')
     addLine(levels.swingLow, COLOR_SWING, LINE_STYLE_DOTTED, '')
   }, [chartReady, levels, activeTimeframe])
+
+  // ─────────────────────────────────────────────────────────────
+  // [PHASE-12.3] Live price line.
+  //
+  // The candle series updates on the 60-second technicals poll, so
+  // the most recent visible candle can trail real-time spot by up
+  // to a minute. The useGoldPrice hook ticks every ~30s; we draw
+  // the latest spot as a thin solid line on the candle series.
+  // The same IPriceLine handle is reused across renders — we call
+  // applyOptions to update its price rather than detach + recreate
+  // (avoids visual flicker on every poll).
+  //
+  // The line is intentionally cleared and re-created when the
+  // chart series itself is re-mounted (chartReady flip) or when
+  // the timeframe changes (a TF switch destroys + recreates the
+  // candle series under the hood, taking the line with it).
+  // ─────────────────────────────────────────────────────────────
+  useEffect(() => {
+    const series = candleSeriesRef.current
+    if (!chartReady || !series) return
+
+    const valid =
+      typeof livePrice === 'number' &&
+      Number.isFinite(livePrice) &&
+      livePrice > 0
+    if (!valid) {
+      // Clear the live line when price falls back to a non-positive
+      // value (outage / mock placeholder).
+      if (livePriceLineRef.current) {
+        try {
+          series.removePriceLine(livePriceLineRef.current)
+        } catch {
+          // Series may already be torn down — ignore.
+        }
+        livePriceLineRef.current = null
+      }
+      return
+    }
+
+    // First valid sample for this series instance — create the line.
+    if (!livePriceLineRef.current) {
+      livePriceLineRef.current = series.createPriceLine({
+        price: livePrice,
+        color: '#fbbf24',
+        lineWidth: 1,
+        // Solid (not dashed/dotted) so the live line reads as
+        // "here-and-now" vs. the dashed AI levels.
+        lineStyle: 0,
+        axisLabelVisible: true,
+        title: 'LIVE',
+      })
+      return
+    }
+
+    // Subsequent ticks — just update the price.
+    try {
+      livePriceLineRef.current.applyOptions({ price: livePrice })
+    } catch {
+      // The underlying series may have been re-created on a TF
+      // switch; the next render's chartReady cycle will re-init
+      // the line.
+    }
+  }, [chartReady, livePrice, activeTimeframe])
 
   // Whether the chart legend should advertise AI levels — only
   // show those swatches once an analysis has populated them.

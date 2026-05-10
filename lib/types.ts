@@ -257,6 +257,12 @@ export interface ChartSeries {
 // candles across those timeframes. Existing consumers can keep
 // reading `indicators` + `chart` unchanged; new consumers opt in
 // to the multi-timeframe + pattern fields.
+//
+// [PHASE-12.3] expansion — daily classical + camarilla pivots,
+// London/NY anchored VWAPs, and an ATR volatility-regime summary.
+// All optional so older clients (and outage fallbacks) still
+// validate; the chart and panel render rows only for fields
+// present.
 export interface TechnicalsResponse {
   indicators: TechnicalIndicators
   chart: ChartSeries
@@ -274,6 +280,78 @@ export interface TechnicalsResponse {
   // the timeframes above. Empty array when nothing fires; absent
   // during the [SPRINT-1] types-only landing (see note above).
   patterns?: DetectedPattern[]
+
+  // [PHASE-12.3] Daily pivots (classical + camarilla) computed
+  // from the prior UTC day's H/L/C. null when the route's 1H
+  // history is too short to span yesterday.
+  pivots?: DailyPivotsSummary | null
+
+  // [PHASE-12.3] Anchored VWAP from London (07:00 UTC) and NY
+  // (13:00 UTC) opens, computed from the 15M candle bundle.
+  // Empty `series` and 0 `latest` when the anchor lies in the
+  // future relative to the current UTC time.
+  sessionVwaps?: SessionVwapsSummary
+
+  // [PHASE-12.3] ATR(14) percentile rank vs the prior 90 days.
+  // null when history is too short (< 50 ATR observations).
+  atrSummary?: AtrSummaryPayload | null
+}
+
+// ─────────────────────────────────────────────────────────────────
+// [PHASE-12.3] Pivots / VWAP / ATR summary payloads
+//
+// Mirror runtime shapes from lib/pivots.ts, lib/vwap.ts,
+// lib/atrPercentile.ts so consumers (chart + panels + history) can
+// import these without pulling the server-side compute libs into
+// the client bundle.
+// ─────────────────────────────────────────────────────────────────
+
+export interface DailyPivotsSummary {
+  priorHigh: number
+  priorLow: number
+  priorClose: number
+  classical: {
+    pivot: number
+    r1: number
+    r2: number
+    r3: number
+    s1: number
+    s2: number
+    s3: number
+  }
+  camarilla: {
+    r1: number
+    r2: number
+    r3: number
+    r4: number
+    s1: number
+    s2: number
+    s3: number
+    s4: number
+  }
+}
+
+export interface AnchoredVwapPayload {
+  anchor: 'LONDON_OPEN' | 'NY_OPEN'
+  anchorAt: string                    // ISO 8601
+  series: { time: number; value: number }[]
+  latest: number
+}
+
+export interface SessionVwapsSummary {
+  london: AnchoredVwapPayload
+  ny: AnchoredVwapPayload
+}
+
+// Coarse volatility regime — pros use this to size positions.
+// LOW=fade-friendly, NORMAL=full size, HIGH=trim, EXTREME=half size.
+export type AtrRegime = 'LOW' | 'NORMAL' | 'HIGH' | 'EXTREME'
+
+export interface AtrSummaryPayload {
+  current: number       // latest ATR(14) value, USD
+  percentile: number    // 0..100 rank within the 90d window
+  regime: AtrRegime
+  windowDays: number    // how many days backed the percentile
 }
 
 // AI levels overlaid on the GoldChart as horizontal price lines.
