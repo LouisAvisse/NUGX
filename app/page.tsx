@@ -33,6 +33,7 @@ import PriceBar from '@/components/PriceBar'
 import TradingViewChart from '@/components/TradingViewChart'
 import AnalysisPanel from '@/components/AnalysisPanel'
 import SignalsPanel from '@/components/SignalsPanel'
+import MacroExtrasRow from '@/components/MacroExtrasRow'
 import CalendarPanel from '@/components/CalendarPanel'
 import NewsFeed from '@/components/NewsFeed'
 import BottomBar from '@/components/BottomBar'
@@ -251,6 +252,12 @@ export default function Page() {
 
       {/* 2. Signals strip — always horizontal, scrolls when narrow. */}
       <SignalsPanel />
+
+      {/* 2b. [PHASE-12.6] Macro-extras strip — surfaces the
+          PHASE-12.2/12.3 data layers (real yields, breakeven,
+          Gold-Silver Ratio, ATR regime, COT positioning). Auto-
+          collapses when no source has data. */}
+      <MacroExtrasRow />
 
       {/* 3. Middle row — 3 cols on desktop, vertical stack
             (chart → copilot → news+calendar) on mobile + tablet. */}

@@ -26,6 +26,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import Tooltip from '@/components/Tooltip'
 import PositionSizingCard from '@/components/PositionSizingCard'
 import CopyOrderButton from '@/components/CopyOrderButton'
+import PerformanceSummaryCard from '@/components/PerformanceSummaryCard'
 import { useAnalysis } from '@/lib/hooks/useAnalysis'
 import { useEntryWatcher } from '@/lib/hooks/useEntryWatcher'
 import { useGoldPrice } from '@/lib/hooks/useGoldPrice'
@@ -2214,6 +2215,11 @@ export default function AnalysisPanel({
               {calibration.recordsWithOutcome} {T.calibrationOutcomes}
             </span>
           </div>
+
+          {/* [PHASE-12.6] Performance summary card — sits inside the
+              calibration block so all "trader stats" surfaces are
+              visually grouped. Self-hides under 3 closed trades. */}
+          <PerformanceSummaryCard />
 
           {!calibration.isCalibrated ? (
             // [ONBOARDING] Not yet calibrated. Pre-10-outcome state
