@@ -18,8 +18,36 @@ import "./globals.css";
 // Browser tab title — leads with NUGX, then the symbol so a tab
 // peek tells the trader the app + the instrument at a glance.
 // (page.tsx overrides this dynamically once a price tick lands.)
+//
+// [PHASE-12.7] PWA metadata. The web manifest is exposed via
+// app/manifest.ts (Next 15 metadata API). The meta tags below
+// cover iOS Safari's "Add to Home Screen" path which Apple still
+// gates on the legacy apple-* meta cluster rather than the
+// standard manifest.
 export const metadata: Metadata = {
-  title: "NUGX — XAU/USD Terminal",
+  title: 'NUGX — XAU/USD Terminal',
+  applicationName: 'NUGX',
+  appleWebApp: {
+    capable: true,
+    title: 'NUGX',
+    statusBarStyle: 'black-translucent',
+  },
+  formatDetection: {
+    telephone: false,
+  },
+  // Manifest URL is auto-emitted by Next when app/manifest.ts
+  // exists; declaring it explicitly here makes the link tag
+  // render even if the build pipeline ever swaps detection logic.
+  manifest: '/manifest.webmanifest',
+};
+
+export const viewport = {
+  themeColor: '#0a0a0a',
+  // Lock the user-zoom on phones so chart pinch-zoom doesn't
+  // accidentally scale the whole UI.
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
 };
 
 export default function RootLayout({
@@ -39,7 +67,29 @@ export default function RootLayout({
       {/* Inline style guarantees the font applies even before
           globals.css loads, avoiding a flash of system sans-serif
           on first paint. */}
-      <body style={{ fontFamily: "var(--font-sans)" }}>{children}</body>
+      <body style={{ fontFamily: "var(--font-sans)" }}>
+        {children}
+        {/* [PHASE-12.7] Service worker registration — installs the
+            shell cache + the network-first /api/* handler. The
+            dynamic-import keeps the registration out of the SSR
+            bundle. Failures are silent: no SW = no offline support,
+            but the rest of the app still works. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              if ('serviceWorker' in navigator) {
+                window.addEventListener('load', function () {
+                  navigator.serviceWorker
+                    .register('/sw.js')
+                    .catch(function (err) {
+                      console.warn('[sw] registration failed:', err);
+                    });
+                });
+              }
+            `,
+          }}
+        />
+      </body>
     </html>
   );
 }
