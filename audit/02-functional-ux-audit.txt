@@ -1,0 +1,1104 @@
+================================================================================
+NUGX FUNCTIONAL + UX AUDIT
+================================================================================
+
+Project   : NUGX gold-trading dashboard
+Stack     : Next.js 15 (App Router) / React 19 / TypeScript / Tailwind 4
+Audited   : Top-tier testing agent
+Method    : Static code review of every component + hook + route, with live
+            curl probes against the running dev server (localhost:3001)
+
+Total findings: 96 (+ 15 positive observations)
+  BLOCKING   3
+  MAJOR      27
+  MINOR      45
+  NIT        21
+
+================================================================================
+0. EXECUTIVE SUMMARY
+================================================================================
+
+The codebase is well-commented and has an unusually consistent design system —
+nearly every panel reuses the same dark #111/#222/#0a0a0a chrome,
+#4ade80/#f87171/#fbbf24 semantic colors, 8-9-10-11px typography ladder. Most
+UX issues are visible polish, not structural rewrites.
+
+The structural problems are concentrated in two areas:
+
+  1. PRICE UPSTREAM IS BROKEN (F-01). The gold-api.com mapping doesn't match
+     the actual upstream response shape — change/high/low/open/prevClose are
+     SILENTLY ZERO on every successful fetch. This poisons the page title,
+     PriceBar, BottomBar, the AnalysisRequest sent to Claude, and the chart's
+     swingHigh/swingLow inputs. Single highest-impact fix in the codebase.
+
+  2. I18N IS HALF-FINISHED. French and English copy are interleaved across
+     PriceBar (UNAVAILABLE / DIRECT), NewsFeed (BULLISH FLOW / MIXED),
+     CalendarPanel (passed / in 23m), GoldChart (ALIGNED / UPDATING), the
+     entire MEMORY tab, the entire Briefing modal, every alert banner. The
+     dashboard switches mid-paragraph.
+
+The accessibility story is the weakest dimension. Tooltips don't focus,
+modals don't manage focus, color is the only signaling vocabulary, no live
+regions for price or alerts. That's the biggest gap between "looks polished"
+and "is professional."
+
+Both structural issues are fixable in a focused day of work.
+
+================================================================================
+1. PRICEBAR
+================================================================================
+
+------------------------------------------------------------------------------
+F-01 [BLOCKING] Price API only returns spot — H/L/CHANGE/OPEN are
+     permanently zero
+------------------------------------------------------------------------------
+  LOCATION       app/api/price/route.ts:47-56
+  WHAT'S WRONG   The route maps raw.ch / raw.chp / raw.high / raw.low /
+                 raw.open / raw.prev_close / raw.timestamp. The actual
+                 gold-api.com response (verified live with curl
+                 https://api.gold-api.com/price/XAU) only emits: currency,
+                 price, name, symbol, updatedAt, updatedAtReadable.
+                 So change, changePct, high, low, open, prevClose, timestamp
+                 are ALL 0 on every successful fetch. Confirmed:
+                   curl localhost:3001/api/price
+                   {"price":4615.4,"change":0,"changePct":0,"high":0,
+                    "low":0,"open":0,"prevClose":0,"timestamp":0}
+  IMPACT         Half of PriceBar (CHG, H, L), the entire BottomBar (OPEN,
+                 PREV, CHG, H, L), the page-title arrow/percent, the
+                 dayHigh/dayLow tooltips, AND the AnalysisRequest fields
+                 high/low/open/prevClose sent to Claude — all silently
+                 $0.00 / +0.00%. The model is being told "price is $4615
+                 but session high is $0" — that's not just visual breakage,
+                 it CORRUPTS EVERY ANALYSIS DECISION.
+  FIX            Two options:
+                 (a) Drop gold-api.com for OHLC and derive H/L/open/
+                     prevClose from the technicals 1H candle history
+                     (/api/technicals already returns 1H candles). Compute
+                     today's H/L from candles where time >= startOfDayUTC,
+                     prevClose from the last candle of the previous UTC day,
+                     change/changePct from price - prevClose.
+                 (b) Swap upstream to a feed that returns OHLC (metals.dev,
+                     Yahoo GC=F).
+
+------------------------------------------------------------------------------
+F-02 [MAJOR] Price flash baseline can fire huge fake-swings after API
+     hiccup
+------------------------------------------------------------------------------
+  LOCATION       PriceBar.tsx:103-120
+  WHAT'S WRONG   prevPriceRef seeds with the first non-null tick. If
+                 useGoldPrice ever lands a 0 price (FALLBACK at
+                 route.ts:17), the ref is seeded with 0. The next real tick
+                 at $4615 then flashes green for a 4615-point move.
+  IMPACT         A single transient API failure makes the price block
+                 flash huge swings the user didn't experience.
+  FIX            Skip flash when next === 0 OR
+                 Math.abs(next - prev) > prev * 0.05.
+
+------------------------------------------------------------------------------
+F-03 [MINOR] Flash background bleeds onto sibling blocks via padding
+------------------------------------------------------------------------------
+  LOCATION       PriceBar.tsx:195-215
+  WHAT'S WRONG   Flash class is on a wrapping <div> that has 6px horizontal
+                 padding. Combined with 16px gap to siblings, the flash
+                 reads as a rectangular halo around the number.
+  FIX            Wrap formatted price in inline-block span and apply flash
+                 to that span only.
+
+------------------------------------------------------------------------------
+F-04 [MINOR] LIVE indicator says "DIRECT" but tooltip says "30s polling"
+------------------------------------------------------------------------------
+  LOCATION       PriceBar.tsx:404-425
+  WHAT'S WRONG   Label "DIRECT" (FR for "live") implies streaming. Tooltip
+                 explains 30-second polling. Sophisticated traders notice
+                 and lose trust.
+  FIX            Rename label to "MAJ 30s" or change tooltip to "Cours
+                 rafraîchi automatiquement toutes les 30 secondes".
+
+------------------------------------------------------------------------------
+F-05 [MINOR] No tooltip on the price block itself or the change cell
+------------------------------------------------------------------------------
+  LOCATION       PriceBar.tsx:195-215, :218-237
+  WHAT'S WRONG   Tooltips wrap XAU/USD, OR SPOT, H, L, SESSION, BRIEFING,
+                 LIVE. The two MOST-glanced numbers (price + change) lack
+                 the explanatory hover that every other element has.
+  FIX            Add Tooltip wrappers around both.
+
+------------------------------------------------------------------------------
+F-06 [MINOR] "UNAVAILABLE" copy is English in an otherwise-French bar
+------------------------------------------------------------------------------
+  LOCATION       PriceBar.tsx:204-206
+  FIX            "INDISPONIBLE".
+
+------------------------------------------------------------------------------
+F-07 [NIT] No focus-visible ring on toggle chips
+------------------------------------------------------------------------------
+  LOCATION       PriceBar.tsx:329-369
+  FIX            Global rule:
+                 .terminal-btn:focus-visible {
+                   outline: 1px solid #f5f5f5;
+                   outline-offset: 1px;
+                 }
+
+================================================================================
+2. SIGNALSPANEL
+================================================================================
+
+------------------------------------------------------------------------------
+F-08 [MAJOR] DXY/US10Y price color uses inverse logic — confusing to
+     conventional readers
+------------------------------------------------------------------------------
+  LOCATION       SignalsPanel.tsx:34-38
+  WHAT'S WRONG   inverseValueColor returns red when DXY rises (because
+                 rising DXY is bearish for gold). Applied to the PRICE
+                 cell at :247-254 — so "98.21" itself is colored red. The
+                 change% next to it (:258-260) uses standard changeColor,
+                 so two cells with the same numeric direction can display
+                 OPPOSITE colors (DXY +0.05% → price red, change green).
+  IMPACT         Most traders parse "absolute level red" as "value fell".
+                 The intent ("inverse-correlated to gold") needs a clearer
+                 affordance.
+  FIX            Keep DXY/US10Y price values neutral white. Tint a small
+                 qualifier badge ("inv: BAISSE pour l'or") next to the
+                 value, OR drop the inverse logic entirely (the 8-signal
+                 grid in COPILOT already maps DXY/US10Y direction to gold
+                 bias).
+
+------------------------------------------------------------------------------
+F-09 [MINOR] BB chip uses EMA20 as the comparison reference, not live
+     price
+------------------------------------------------------------------------------
+  LOCATION       SignalsPanel.tsx:540-572
+  WHAT'S WRONG   Reads ref = ind.ema20 then compares to bbUpper/bbLower.
+                 Bollinger position by definition compares PRICE to bands,
+                 not EMA20. EMA20 sits very close to BB midline (BB uses
+                 SMA20, EMA20 is similar) so this chip will essentially
+                 always read "DANS".
+  IMPACT         Chip is decorative, not informative.
+  FIX            Pass live spot price into the panel (or read from
+                 useGoldPrice) and compare price to bands.
+
+------------------------------------------------------------------------------
+F-10 [MINOR] Session VOL chip is binary — Tokyo shows "NORMALE"
+------------------------------------------------------------------------------
+  LOCATION       SignalsPanel.tsx:316-333
+  WHAT'S WRONG   VOL reads "ÉLEVÉE" or "NORMALE". During Tokyo (truly
+                 low-volume) it still shows NORMALE.
+  FIX            Three-tier: HIGH (overlap), NORMAL (London/NY), BASSE
+                 (Tokyo), MORTE (Off-hours).
+
+------------------------------------------------------------------------------
+F-11 [MINOR] STATUS marker time can show wall-clock when technicals
+     missing
+------------------------------------------------------------------------------
+  LOCATION       SignalsPanel.tsx:172-186
+  WHAT'S WRONG   Falls back to new Date() if data exists but
+                 technicals.lastUpdated doesn't. Stale signals appear
+                 fresh.
+  FIX            Track signalsLastUpdated from useSignals; pick the older
+                 of the two timestamps.
+
+------------------------------------------------------------------------------
+F-12 [NIT] AMP / TEND / MAJ abbreviations cryptic without expansion
+------------------------------------------------------------------------------
+  FIX            Spell out "AMPL." or "AMPL. JOUR".
+
+------------------------------------------------------------------------------
+F-13 [NIT] Horizontal scroll has no edge fades to signal more content
+------------------------------------------------------------------------------
+  LOCATION       SignalsPanel.tsx:189-213
+  FIX            mask-image gradient when scrollWidth > clientWidth.
+
+================================================================================
+3. NEWSFEED
+================================================================================
+
+------------------------------------------------------------------------------
+F-14 [MAJOR] Sentiment counts treat undefined as NEUTRAL — silent skew
+------------------------------------------------------------------------------
+  LOCATION       NewsFeed.tsx:197-207
+  WHAT'S WRONG   else branch counts both 'NEUTRAL' and undefined as "neut".
+                 Current /api/news always sets sentiment, so benign today.
+                 But if sentiment tagging breaks on a row, it gets
+                 miscounted as neutral and the BULL/BEAR ratio bar quietly
+                 skews. Also, the verdict heuristic (bull > bear + 1)
+                 treats every article with no sentiment as a vote for
+                 MIXED.
+  FIX            Track a fourth `unknown` count, exclude it from verdict.
+                 Render the ratio bar as 4 segments
+                 (BULL/BEAR/NEUT/UNKNOWN gray-stripe).
+
+------------------------------------------------------------------------------
+F-15 [MAJOR] BULLISH FLOW / BEARISH FLOW / MIXED in English in French panel
+------------------------------------------------------------------------------
+  LOCATION       NewsFeed.tsx:212-218, :268
+  FIX            FLUX HAUSSIER, FLUX BAISSIER, MITIGÉ. Same for
+                 "AUCUN RÉSULTAT" body.
+
+------------------------------------------------------------------------------
+F-16 [MAJOR] No tooltips on filter chips, flow verdict, or ratio bar
+------------------------------------------------------------------------------
+  LOCATION       NewsFeed.tsx:142-172, :460-468, :478-518
+  IMPACT         Key glance-and-decide surface with zero affordance for
+                 first-time users.
+  FIX            Add tooltips to filter chips, verdict, ratio bar.
+
+------------------------------------------------------------------------------
+F-17 [MINOR] All-unknown sentiment renders as 100% gray — looks deliberate
+------------------------------------------------------------------------------
+  See F-14 fix.
+
+------------------------------------------------------------------------------
+F-18 [MINOR] window.open(url, '_blank') with no noopener noreferrer
+------------------------------------------------------------------------------
+  LOCATION       NewsFeed.tsx:279
+  WHAT'S WRONG   Best practice for _blank is rel="noopener noreferrer".
+                 Better still: render <a target="_blank"> so middle-click
+                 and Cmd-click work natively.
+  FIX            Replace row's onClick with
+                 <a href={a.url} target="_blank" rel="noopener noreferrer">.
+  RELATED        Security audit M1 — also add scheme validation.
+
+------------------------------------------------------------------------------
+F-19 [MINOR] Filtered-count footer is English (HIGH IMPACT / BULLISH /
+     ARTICLES)
+------------------------------------------------------------------------------
+  FIX            "X IMPACT HAUT", "X HAUSSIERS", "X ARTICLES".
+
+------------------------------------------------------------------------------
+F-20 [NIT] Per-article hover tints title only — impact badge looks "stuck"
+------------------------------------------------------------------------------
+  FIX            Add hover-derived border tint to the badge.
+
+================================================================================
+4. CALENDARPANEL
+================================================================================
+
+------------------------------------------------------------------------------
+F-21 [MAJOR] Countdown copy English in French panel
+------------------------------------------------------------------------------
+  LOCATION       CalendarPanel.tsx:46-62
+  WHAT'S WRONG   "passed", "in 23m", "in 2h 14m", "No upcoming gold
+                 events today." next to "CALENDRIER", "DÉGAGÉ", "BLOQUÉ".
+  FIX            "passé", "dans 23m", "dans 2h 14m", "Aucun événement à
+                 venir aujourd'hui."
+
+------------------------------------------------------------------------------
+F-22 [MINOR] Forecast/previous row hidden by U+2014 em-dash equality
+------------------------------------------------------------------------------
+  LOCATION       CalendarPanel.tsx:210
+  WHAT'S WRONG   Comparison uses U+2014 em-dash. A future feed quirk
+                 returning '' or ASCII '-' silently flips row visibility.
+  FIX            e.forecast && e.forecast !== '—' && e.forecast !== '-'.
+
+------------------------------------------------------------------------------
+F-23 [MINOR] Country badge inconsistent (USD vs US)
+------------------------------------------------------------------------------
+  FIX            Normalize to 3-letter currency in route.
+
+------------------------------------------------------------------------------
+F-24 [MINOR] No tooltip on DÉGAGÉ / BLOQUÉ
+------------------------------------------------------------------------------
+  FIX            "DÉGAGÉ = aucun événement à fort impact dans les 45
+                 prochaines minutes. BLOQUÉ = événement imminent, ne pas
+                 ouvrir de nouvelle position."
+
+------------------------------------------------------------------------------
+F-25 [NIT] Past events mix with upcoming
+------------------------------------------------------------------------------
+  FIX            Filter out past events OR collapse to "+ N RÉCENTS".
+
+================================================================================
+5. GOLDCHART
+================================================================================
+
+------------------------------------------------------------------------------
+F-26 [MAJOR] Pattern markers all stamp on latest candle — visually wrong
+------------------------------------------------------------------------------
+  LOCATION       TradingViewChart.tsx:470
+  WHAT'S WRONG   const lastTime = activeData.candles[length-1].time and
+                 every marker is placed at lastTime. Header comment admits
+                 this approximation is "accurate to ±a couple bars".
+  IMPACT         A "Bullish engulfing" arrow on candle T when it formed
+                 on T-2 is functionally a wrong signal in muscle memory.
+                 Multiple patterns from different candles all stack on the
+                 same bar.
+  FIX            Have lib/patterns.ts return the candle index for each
+                 detected pattern (already in scope — it scans windows).
+                 Pipe candleTime through DetectedPattern type. Stack
+                 markers vertically when multiple share a time.
+
+------------------------------------------------------------------------------
+F-27 [MAJOR] AI level lines persist on TFs where they aren't relevant
+------------------------------------------------------------------------------
+  LOCATION       TradingViewChart.tsx:513-556
+  WHAT'S WRONG   Effect re-creates lines on every TF change but doesn't
+                 indicate the levels were derived from 1H. On 4H zoomed
+                 out to weeks, an entry $4625 may be off-screen, more
+                 importantly the analysis is timeframe-coupled but the
+                 chart suggests the levels are universally applicable.
+  FIX            Add "(1H)" tag next to ENTRY/STOP/TARGET swatches in
+                 legend. Either only draw the lines on 1H, or draw them
+                 faded on 15M/4H.
+
+------------------------------------------------------------------------------
+F-28 [MAJOR] No tooltip on alignment-strip chips; ALIGNED in EN
+------------------------------------------------------------------------------
+  LOCATION       TradingViewChart.tsx:687-722
+  WHAT'S WRONG   Only "ALIGNED" word has tooltip. 4H: UP / 1H: DOWN /
+                 15M: RANGING chips have none. .replace('TREND', '')
+                 produces UP/DOWN/RANGING which sound directional but
+                 aren't standard MT5/TradingView vocabulary.
+  FIX            Tooltip per chip: "4H = trend filter — never trade
+                 against this." Use HAUSSIER/BAISSIER/RANGE; ALIGNÉ.
+
+------------------------------------------------------------------------------
+F-29 [MINOR] Drawer toggle triggers chart resize that can shift visible
+     range
+------------------------------------------------------------------------------
+  FIX            Capture chart.timeScale().getVisibleLogicalRange() before
+                 resize and restore after.
+
+------------------------------------------------------------------------------
+F-30 [MINOR] EMA200 swatch fades on non-1H — looks like "loading"
+------------------------------------------------------------------------------
+  FIX            Add "(1H seul)" suffix or strikethrough swatch.
+
+------------------------------------------------------------------------------
+F-31 [MINOR] TradingView iframe locked to locale=en
+------------------------------------------------------------------------------
+  FIX            &locale=fr.
+
+------------------------------------------------------------------------------
+F-32 [MINOR] On mobile, TV iframe collapses to ~84px — unusable
+------------------------------------------------------------------------------
+  LOCATION       TradingViewChart.tsx:741-749, app/page.tsx:155
+  FIX            Hide TV strip on mobile, OR bump chart panel to 360px
+                 mobile and TV strip to 35%.
+
+------------------------------------------------------------------------------
+F-33 [MINOR] TF buttons have no aria-pressed / aria-label
+------------------------------------------------------------------------------
+  FIX            aria-pressed={isActive}, aria-label="Show ${tf} timeframe".
+
+------------------------------------------------------------------------------
+F-34 [NIT] UPDATING marker barely visible at #333 on dark bg
+------------------------------------------------------------------------------
+  FIX            Bump to #666 or apply pulse animation.
+
+================================================================================
+6. ANALYSISPANEL (COPILOT)
+================================================================================
+
+------------------------------------------------------------------------------
+F-35 [BLOCKING-flavored MAJOR] Auto-trigger fires when goldPrice.data
+     fallback has price=0
+------------------------------------------------------------------------------
+  LOCATION       AnalysisPanel.tsx:826-832
+  WHAT'S WRONG   if (!goldPrice.data) return — but goldPrice.data is the
+                 FALLBACK object (price=0) when the price API fails. So
+                 goldPrice.data is truthy and the analysis fires with $0
+                 price. Combined with F-01 (price's H/L/open ARE always 0
+                 from a misshape), the analysis ALWAYS runs against
+                 price=4615, high=0, low=0, open=0 — corrupted input to
+                 the model.
+  IMPACT         First analysis is structurally broken. The mock-fallback
+                 in buildMockAnalysis even guards: const p = req.price > 0
+                 ? req.price : 3300 — it knows the price can be 0.
+  FIX            Tighten the guard:
+                   if (!goldPrice.data || goldPrice.data.price <= 0) return
+                 AND ship a real /api/price (F-01).
+
+------------------------------------------------------------------------------
+F-36 [MAJOR] parseCatalyst silent fail dumps catalyst into NOW, leaves
+     RISK/TRIGGER blank
+------------------------------------------------------------------------------
+  LOCATION       AnalysisPanel.tsx:261-274
+  WHAT'S WRONG   If any of the three named sections is missing (model
+                 deviates, uses **RISK:** markdown, etc.), falls back to
+                 dumping the whole string in `now` and `——` for the
+                 others. Trader sees a hollowed analysis.
+  FIX            Strip markdown bold/markers; fall back to splitting on
+                 newlines; surface "MODÈLE FORMAT INVALIDE" status when
+                 >1 field missing.
+
+------------------------------------------------------------------------------
+F-37 [MAJOR] Bias / signal short labels English in French panel
+     (BULL/BEAR/NEUT, BULLISH/BEARISH/NEUTRAL)
+------------------------------------------------------------------------------
+  LOCATION       AnalysisPanel.tsx:193-197 (signalShortText), bias badge
+                 prints raw enum
+  FIX            displayBias() mapping HAUSSIER/BAISSIER/NEUTRE; same for
+                 short tags HAUS/BAIS/NEUT.
+
+------------------------------------------------------------------------------
+F-38 [MAJOR] Confluence bar can't render >8/8 (timeframe-alignment bonus
+     allows 9/8)
+------------------------------------------------------------------------------
+  LOCATION       AnalysisPanel.tsx:1273-1308
+  WHAT'S WRONG   System prompt allows confluenceScore > 8 via TF-alignment
+                 bonus. UI hard-codes 8 segments and reads "9/8" with all
+                 8 blocks filled — visually identical to 8/8.
+  FIX            Make bar dynamic on confluenceTotal. Cap server-side at
+                 8, OR render a special "+1 alignement TF" chip below.
+
+------------------------------------------------------------------------------
+F-39 [MAJOR] First analysis after page-load loses confluence personalization
+------------------------------------------------------------------------------
+  LOCATION       AnalysisPanel.tsx:802
+  WHAT'S WRONG   data?.confluenceScore is undefined on first run after
+                 mount, so currentConfluenceAccuracy lookup is null even
+                 if cached history exists.
+  FIX            Pre-populate from history[0]?.confluenceScore as a hint,
+                 or fall back to bestConfluenceThreshold.
+
+------------------------------------------------------------------------------
+F-40 [MINOR] biasColor imported but unused
+------------------------------------------------------------------------------
+  LOCATION       AnalysisPanel.tsx:35
+  FIX            Remove from import.
+
+------------------------------------------------------------------------------
+F-41 [MINOR] Calibration card body is entirely English
+------------------------------------------------------------------------------
+  LOCATION       AnalysisPanel.tsx:543-587, :1483-1484
+  FIX            Translate all strings.
+
+------------------------------------------------------------------------------
+F-42 [MINOR] Disabled action button is barely visible
+------------------------------------------------------------------------------
+  LOCATION       AnalysisPanel.tsx:1537-1573
+  WHAT'S WRONG   Disabled bg #1a1a1a, color #666666, borderless against
+                 #111 panel.
+  FIX            Add subtle progress indicator + 1px progress bar at top.
+
+------------------------------------------------------------------------------
+F-43 [MINOR] Calendar-blocked auto-trigger leaves panel BLANK before
+     high-impact events
+------------------------------------------------------------------------------
+  LOCATION       AnalysisPanel.tsx:829
+  WHAT'S WRONG   Auto-block on mount silences the panel right when the
+                 trader most needs context (30 min before NFP/CPI). Empty
+                 state shows "Lancer une analyse..." but the button is
+                 disabled.
+  IMPACT         Most valuable time → silent.
+  FIX            Drop the auto-block on mount — let the analysis fire (the
+                 system prompt forces FLAT anyway when blocked). Show a
+                 "RECOMMANDATION FORCÉE FLAT — calendrier bloqué" ribbon
+                 over the result.
+
+------------------------------------------------------------------------------
+F-44 [NIT] 8-signal grid mixes FR labels (TENDANCE) with EN value
+     (BULL/BEAR/NEUT)
+------------------------------------------------------------------------------
+  See F-37.
+
+------------------------------------------------------------------------------
+F-45 [NIT] First-load button text doesn't distinguish "auto-running" vs
+     "user-clicked"
+------------------------------------------------------------------------------
+  FIX            When loading && !data, show "ANALYSE INITIALE…" instead.
+
+================================================================================
+7. JOURNALPANEL
+================================================================================
+
+------------------------------------------------------------------------------
+F-46 [MAJOR] No focus management — opens but keyboard focus stays in
+     occluded page
+------------------------------------------------------------------------------
+  LOCATION       JournalPanel.tsx:579-758
+  WHAT'S WRONG   No useEffect to focus close button or first input.
+                 Overlay also doesn't set role="dialog" / aria-modal /
+                 aria-labelledby. Tabbing inside the form interleaves
+                 with elements behind the overlay.
+  IMPACT         Keyboard users get TRAPPED in the underlying chart while
+                 the modal occludes it.
+  FIX            <aside role="dialog" aria-modal="true"
+                   aria-labelledby="journal-title">
+                 useEffect to focus first input on open. Trap focus
+                 (focusable-elements helper, intercept Tab key on first/
+                 last) until close.
+
+------------------------------------------------------------------------------
+F-47 [MAJOR] No direction-aware validation — STOP > ENTRY for LONG saves
+     silently
+------------------------------------------------------------------------------
+  LOCATION       JournalPanel.tsx:332-342
+  WHAT'S WRONG   parseFloat without checking direction sanity. A LONG
+                 with stop $4700 and target $4600 saves without warning,
+                 produces a negative-R:R card.
+  IMPACT         Trader miskeys → corrupt journal → wrong P&L → corrupt
+                 personalPatterns → corrupt model context.
+  FIX            LONG: stop < entry < target.
+                 SHORT: stop > entry > target.
+                 Inline red border + helper text on bad entries; disable
+                 LOG TRADE button until valid.
+
+------------------------------------------------------------------------------
+F-48 [MAJOR] EntryCloseForm posts exit price with NO confirmation
+------------------------------------------------------------------------------
+  LOCATION       JournalPanel.tsx:138-178
+  WHAT'S WRONG   Single click closes a real trade. No "reopen"
+                 affordance.
+  FIX            Two-step: typing exit + clicking CLOSE → confirmation
+                 chip "Confirmer fermeture à $X.XX [Annuler]".
+
+------------------------------------------------------------------------------
+F-49 [MINOR] Delete ✕ has no confirmation — destructive single click
+------------------------------------------------------------------------------
+  LOCATION       JournalPanel.tsx:286-308
+  FIX            Two-click confirm: first click swaps to "Confirmer ?"
+                 for 3s.
+
+------------------------------------------------------------------------------
+F-50 [MINOR] Header reads "TRADE JOURNAL" in EN
+------------------------------------------------------------------------------
+  FIX            "JOURNAL DE TRADING".
+
+------------------------------------------------------------------------------
+F-51 [MINOR] Entire MEMORY tab body is English
+------------------------------------------------------------------------------
+  LOCATION       JournalPanel.tsx:442-577
+  FIX            Translate everything: BY SESSION → PAR SESSION,
+                 ACCURACY → PRÉCISION, etc.
+
+------------------------------------------------------------------------------
+F-52 [MINOR] notes textarea has no maxLength — pasted 50KB crashes layout
+------------------------------------------------------------------------------
+  LOCATION       JournalPanel.tsx:402-413, :262-274
+  FIX            maxLength=500. Display:
+                   display: -webkit-box;
+                   WebkitLineClamp: 4;
+                   overflow: hidden;
+                 Plus "show more" affordance.
+
+------------------------------------------------------------------------------
+F-53 [MINOR] Hardcoded Europe/Paris TZ in formatDateTime
+------------------------------------------------------------------------------
+  LOCATION       lib/utils.ts:49-58
+  FIX            Default to browser TZ; expose settings panel.
+
+------------------------------------------------------------------------------
+F-54 [NIT] Numeric inputs lack inputMode="decimal" for mobile
+------------------------------------------------------------------------------
+  FIX            Add inputMode="decimal".
+
+------------------------------------------------------------------------------
+F-55 [NIT] No way to add notes after a trade is closed
+------------------------------------------------------------------------------
+  FIX            Inline edit on closed entries.
+
+================================================================================
+8. BRIEFINGMODAL
+================================================================================
+
+------------------------------------------------------------------------------
+F-56 [MAJOR] Close ✕ button is 14×14 — fails WCAG 2.5.5 (44×44)
+------------------------------------------------------------------------------
+  LOCATION       BriefingModal.tsx:128-145
+  FIX            32×32 with 8px padding for tap surface.
+
+------------------------------------------------------------------------------
+F-57 [MAJOR] No focus management on open
+------------------------------------------------------------------------------
+  LOCATION       BriefingModal.tsx:54-67
+  FIX            useEffect focus close button on open. role="dialog"
+                 aria-modal="true" aria-labelledby="briefing-title".
+
+------------------------------------------------------------------------------
+F-58 [MAJOR] Auto-open every new generatedAt — interrupts mid-trade
+------------------------------------------------------------------------------
+  LOCATION       app/page.tsx:95-106
+  WHAT'S WRONG   Only suppresses on INPUT/TEXTAREA focus. Doesn't
+                 suppress when chart canvas is active, when user just
+                 clicked RUN ANALYSIS, or after the user has explicitly
+                 closed today's briefing.
+  IMPACT         Disruptive for actual day-trading flow.
+  FIX            After user closes auto-opened briefing, store
+                 briefingDismissedFor: YYYY-MM-DD in localStorage. Don't
+                 re-open for that day. Manual chip stays available.
+
+------------------------------------------------------------------------------
+F-59 [MINOR] Entire briefing UI is English
+------------------------------------------------------------------------------
+  LOCATION       BriefingModal.tsx:104, 173-209
+  FIX            BRIEFING SESSION DE LONDRES / NUIT / NIVEAUX / CALENDRIER
+                 / BIAIS / À SURVEILLER. Map BULLISH→HAUSSIER etc.
+
+------------------------------------------------------------------------------
+F-60 [MINOR] High-impact regex misses Powell/ECB/BoE/PCE; duplicates FOMC
+------------------------------------------------------------------------------
+  LOCATION       BriefingModal.tsx:50-52
+  FIX            Reuse GOLD_RELEVANT_KEYWORDS from
+                 app/api/calendar/route.ts:30-50 (export + import).
+
+------------------------------------------------------------------------------
+F-61 [NIT] No scroll-fade hint on long modal
+------------------------------------------------------------------------------
+  FIX            Add inset shadows.
+
+================================================================================
+9. ALERTBANNER
+================================================================================
+
+------------------------------------------------------------------------------
+F-62 [MAJOR] Spacer height jitters during slide-down animation
+------------------------------------------------------------------------------
+  LOCATION       app/page.tsx:113-120, :234-242
+  WHAT'S WRONG   Spacer transition 0.2s ease, banner slide-in 0.2s
+                 ease-out — same duration but height kicks in before
+                 visual.
+  FIX            Use height transition with same easing curve and 50ms
+                 delay so spacer expands when banner is roughly halfway
+                 down.
+
+------------------------------------------------------------------------------
+F-63 [MAJOR] Entire AlertBanner UI is English
+------------------------------------------------------------------------------
+  LOCATION       AlertBanner.tsx:48-62, useAlerts.ts:139-152
+  FIX            ⚠ THÈSE INVALIDÉE / ⚠ APPROCHE INVALIDATION /
+                 + N AUTRES / TOUT EFFACER / "il y a 12s". Translate
+                 message generators in useAlerts.ts.
+
+------------------------------------------------------------------------------
+F-64 [MAJOR] No role="alert" — screen readers don't announce price-cross
+------------------------------------------------------------------------------
+  LOCATION       AlertBanner.tsx:107-122
+  IMPACT         Critical financial event silent for SR users.
+  FIX            role="alert" aria-live="assertive" on each banner div.
+
+------------------------------------------------------------------------------
+F-65 [MINOR] Dismiss ✕ is 12px — fails WCAG target size
+------------------------------------------------------------------------------
+  FIX            28×28 with 12px padding.
+
+------------------------------------------------------------------------------
+F-66 [MINOR] Dismiss-all blocks future warnings for the same thesis
+------------------------------------------------------------------------------
+  LOCATION       useAlerts.ts:160-171
+  WHAT'S WRONG   alertFiredRef retains keys after dismiss; re-cross
+                 can't fire again until analysis itself changes.
+  FIX            Don't dedupe on analysisId-severity alone — also
+                 include a priceAtTrigger band so a fresh cross at a
+                 meaningfully different price re-fires.
+
+------------------------------------------------------------------------------
+F-67 [NIT] timeSince() doesn't auto-update — "12s ago" can stay frozen
+------------------------------------------------------------------------------
+  FIX            30s tick interval that forces re-render.
+
+================================================================================
+10. KEYBOARD + INTERACTIONS
+================================================================================
+
+------------------------------------------------------------------------------
+F-68 [MAJOR] No way to dismiss alerts via keyboard
+------------------------------------------------------------------------------
+  LOCATION       app/page.tsx:177-192
+  WHAT'S WRONG   ESC only handles JournalPanel and BriefingModal.
+  FIX            When alerts.length > 0, ESC dismisses topmost alert
+                 before falling through to modals.
+
+------------------------------------------------------------------------------
+F-69 [MINOR] R/J fire on Cmd-R refresh — race condition
+------------------------------------------------------------------------------
+  LOCATION       app/page.tsx:178-188
+  FIX            Skip if e.metaKey || e.ctrlKey.
+
+------------------------------------------------------------------------------
+F-70 [MINOR] No mobile entry point to journal — chip hidden, no FAB
+------------------------------------------------------------------------------
+  LOCATION       app/page.tsx:360-411
+  IMPACT         Mobile users can't open the journal at all.
+  FIX            Add floating action button on mobile, or mobile-visible
+                 JOURNAL chip in PriceBar.
+
+------------------------------------------------------------------------------
+F-71 [NIT] No keyboard shortcut to open briefing
+------------------------------------------------------------------------------
+  FIX            Add B to toggle BriefingModal.
+
+------------------------------------------------------------------------------
+F-72 [NIT] Stacked tab order doesn't match visual order
+------------------------------------------------------------------------------
+  LOCATION       app/page.tsx:269-356
+  WHAT'S WRONG   CSS order changes visual but not tab. Mobile shows
+                 chart→copilot→news visually, tabs as news→chart→copilot.
+  FIX            Reorder DOM nodes for the mobile case in source order;
+                 drop the CSS order hack.
+
+================================================================================
+11. RESPONSIVE
+================================================================================
+
+------------------------------------------------------------------------------
+F-73 [MAJOR] iPad rotation flips between tablet (stacked) and desktop
+------------------------------------------------------------------------------
+  LOCATION       lib/hooks/useBreakpoint.ts:23-32
+  WHAT'S WRONG   Hard <1024 cutoff. iPad portrait (768-820) → tablet
+                 stacked. iPad landscape (~1024) → desktop. Rotation =
+                 layout flip.
+  FIX            Move desktop boundary to >=1100 to give iPad landscape
+                 a stable tablet experience.
+
+------------------------------------------------------------------------------
+F-74 [MAJOR] SSR fallback shows desktop layout briefly on mobile
+------------------------------------------------------------------------------
+  LOCATION       lib/hooks/useBreakpoint.ts:21
+  WHAT'S WRONG   useState<Breakpoint>('desktop') as SSR default. Layout
+                 flicker 50-150ms on every mobile load.
+  FIX            Lazy initializer reading window.innerWidth (gated on
+                 typeof window !== 'undefined'), or CSS-only media-query
+                 layout to avoid the JS roundtrip.
+
+------------------------------------------------------------------------------
+F-75 [MINOR] Drawer state preserved across breakpoint changes — counter-
+     intuitive
+------------------------------------------------------------------------------
+  LOCATION       app/page.tsx:135-136
+  FIX            Reset on breakpoint change OR persist preference via
+                 localStorage and respect where viable.
+
+------------------------------------------------------------------------------
+F-76 [NIT] Mobile chart canvas effectively ~100px after chrome
+------------------------------------------------------------------------------
+  LOCATION       app/page.tsx:155, TradingViewChart.tsx:626-749
+  FIX            Bump mobile chart height to 360px or hide TV strip
+                 (see F-32).
+
+================================================================================
+12. ACCESSIBILITY
+================================================================================
+
+------------------------------------------------------------------------------
+F-77 [BLOCKING for a11y] Tooltip activates on hover only — keyboard
+     invisible
+------------------------------------------------------------------------------
+  LOCATION       Tooltip.tsx:114-115
+  WHAT'S WRONG   Only onMouseEnter / onMouseLeave. Every tooltip in the
+                 dashboard is keyboard-invisible. Tooltips are
+                 explanation-rich and load-bearing for trader education.
+  FIX            Add onFocus/onBlur on the wrapper span. Set tabIndex=0
+                 on the wrapper. Expose content via aria-describedby
+                 linking to a hidden span so SR users get it too.
+
+------------------------------------------------------------------------------
+F-78 [MAJOR] Color is the entire vocabulary — colorblind users can't
+     parse
+------------------------------------------------------------------------------
+  Pretty much every component.
+  IMPACT         A protan/deutan-blind trader (~6% of males) can't tell
+                 HAUSSIER from BAISSIER in bias badges, can't read flash-
+                 green vs flash-red.
+  FIX            Pair every color with a glyph (▲ for up, ▼ for down —
+                 already done in some places). Add ▲▼ to change cell,
+                 ⬆⬇ to flash, dot+letter to signal grid. High-contrast /
+                 colorblind variant.
+
+------------------------------------------------------------------------------
+F-79 [MAJOR] No semantic landmarks — SR users navigate by landmark
+------------------------------------------------------------------------------
+  LOCATION       app/page.tsx:194 (only <main> exists)
+  FIX            Wrap PriceBar in <header>, NewsFeed/CalendarPanel in
+                 <aside>, AnalysisPanel in <aside aria-label="Copilot">,
+                 BottomBar in <footer>.
+
+------------------------------------------------------------------------------
+F-80 [MAJOR] Live regions missing for price flash, alerts, analysis
+     completion
+------------------------------------------------------------------------------
+  FIX            aria-live="polite" on price div. aria-live="polite"
+                 aria-atomic="true" on recommendation block.
+
+================================================================================
+13. INTERNATIONALIZATION
+================================================================================
+
+------------------------------------------------------------------------------
+F-82 [MAJOR — consolidated] English copy leaking across the dashboard
+------------------------------------------------------------------------------
+  Consolidated list of English strings in an otherwise-French app:
+
+  PriceBar:    "UNAVAILABLE", "DIRECT" / EN tooltip
+  SignalsPanel: "BB", "AMP." abbreviations
+  NewsFeed:    "BULLISH FLOW", "BEARISH FLOW", "MIXED",
+               "${N} HIGH IMPACT", "${N} BULLISH", "${N} ARTICLES",
+               filter empty body
+  CalendarPanel: "passed", "in 23m", "in 2h 14m", empty-state copy,
+               F/P labels
+  GoldChart:   "ENTRY", "STOP", "TARGET", "EMA20/50/200", "ALIGNED",
+               "UPDATING…", "LIVE · TRADINGVIEW", "PATTERN(S)",
+               iframe locale=en
+  AnalysisPanel: bias badge raw enum (BULLISH/BEARISH/NEUTRAL),
+               confidence raw enum (HIGH/MEDIUM/LOW), 8-signal short
+               codes (BULL/BEAR/NEUT), entire calibration card
+  JournalPanel: "TRADE JOURNAL" header, "LOG TRADE +", "EXIT",
+               "CLOSE", "CLOSED", entire MEMORY tab
+  BriefingModal: every label
+  AlertBanner: every string
+
+  FIX          Centralize copy in lib/copy.ts (fr / en map). Pull strings
+               via t(key) helper. Pass locale via prop or hook. This also
+               unblocks future en/es/etc.
+
+------------------------------------------------------------------------------
+F-83 [MINOR] Date/time fixed to Europe/Paris in lib/utils.ts
+------------------------------------------------------------------------------
+  FIX            Default to browser TZ; settings panel.
+
+================================================================================
+14. PERFORMANCE
+================================================================================
+
+------------------------------------------------------------------------------
+F-84 [MAJOR] AnalysisPanel useCallback deps churn on every analysis
+------------------------------------------------------------------------------
+  LOCATION       AnalysisPanel.tsx:805-816
+  WHAT'S WRONG   Depends on data?.confluenceScore. New data → buildRequest
+                 changes → effect re-runs. Guards hold but dep churn means
+                 heavy re-evaluation on every render.
+  FIX            Pull confluenceScore out of buildRequest deps; pass via
+                 ref.
+
+------------------------------------------------------------------------------
+F-85 [MAJOR] useHistory writes whole 200-record array to localStorage on
+     each outcome
+------------------------------------------------------------------------------
+  LOCATION       lib/hooks/useHistory.ts:113-178, lib/history.ts:183-206
+  WHAT'S WRONG   At 200 records, JSON.stringify of the whole array
+                 (~50KB) on every outcome write is non-trivial. Also
+                 setHistory(getHistory()) re-renders dependent components.
+  FIX            Update only the changed record in storage; debounce React
+                 state propagation; consider IndexedDB.
+
+------------------------------------------------------------------------------
+F-86 [MAJOR] useBriefing client fans 5 parallel /api fetches that each do
+     server fetches
+------------------------------------------------------------------------------
+  LOCATION       lib/hooks/useBriefing.ts:87-94
+  WHAT'S WRONG   Each /api/news / /api/technicals takes 500ms-3s round
+                 trip. 5 parallel client fetches that each invoke a server
+                 fetch = latency stacking.
+  FIX            Build server-side fan-out into /api/briefing route
+                 itself.
+
+------------------------------------------------------------------------------
+F-87 [MINOR] useGoldPrice polls every 30s even with tab hidden
+------------------------------------------------------------------------------
+  LOCATION       lib/hooks/useGoldPrice.ts:48-52
+  FIX            Pause when document.hidden via Page Visibility API.
+
+------------------------------------------------------------------------------
+F-88 [MINOR] Hooks keep polling when their drawer is closed
+------------------------------------------------------------------------------
+  FIX            Wire paused: !showLeft prop into the hooks.
+
+------------------------------------------------------------------------------
+F-89 [NIT] Inline styles everywhere — fresh objects on every render
+------------------------------------------------------------------------------
+  Pervasive.
+  FIX            Move chrome styles to globals.css; keep dynamic ones
+                 inline.
+
+================================================================================
+15. ERROR + EDGE CASES
+================================================================================
+
+------------------------------------------------------------------------------
+F-90 [MAJOR] All upstreams return 200 OK with FALLBACK shapes — client
+     can't distinguish "live data is zero" from "outage"
+------------------------------------------------------------------------------
+  LOCATION       Every route's catch handler.
+  WHAT'S WRONG   Combined with F-01, the dashboard never shows an error
+                 state. The MOCK analyze branch produces a fully-populated
+                 card derived from FALLBACK price=0 → fake convincing
+                 entry/stop/target = $0.
+  FIX            Return 503 with a small error envelope on upstream
+                 failure. Mock fallback should only happen when API key
+                 is missing, NOT when an upstream errors. Surface a
+                 "DONNÉES SIMULÉES" badge on impacted panels whenever any
+                 source is mock.
+  RELATED        Security audit M4 — same root cause.
+
+------------------------------------------------------------------------------
+F-91 [MAJOR] parsePrice accepts negative numbers — gold can't be negative
+------------------------------------------------------------------------------
+  LOCATION       lib/utils.ts:91-98, lib/history.ts:158-176
+  WHAT'S WRONG   parseFloat('-3281') is finite, passes Number.isFinite
+                 check, classifies outcomes against negative prices.
+  FIX            n > 0 ? n : 0 after parse.
+
+------------------------------------------------------------------------------
+F-92 [MAJOR] localStorage shape evolution unprotected
+------------------------------------------------------------------------------
+  LOCATION       lib/journal.ts:38-49 (and parallel in alerts/history/
+                 briefing)
+  WHAT'S WRONG   No schemaVersion. JournalEntry missing direction crashes
+                 EntryCard render path. The journal was retired in [#44]
+                 and rebuilt — old data is a real concern.
+  FIX            Add schemaVersion to each record. Per-record validation
+                 on read. Drop invalid rows. "1 entry skipped (incompatible)"
+                 notice.
+
+------------------------------------------------------------------------------
+F-93 [MAJOR] localStorage corruption silently wipes history
+------------------------------------------------------------------------------
+  WHAT'S WRONG   JSON.parse throw → readAll returns []. Next write
+                 overwrites. Data lost.
+  FIX            Backup raw JSON to *_backup key before each write. On
+                 read failure, attempt restore from backup.
+
+------------------------------------------------------------------------------
+F-94 [MAJOR] MEMORY tab byConfluenceScore only renders 5/8 - 8/8
+------------------------------------------------------------------------------
+  LOCATION       JournalPanel.tsx:541-555
+  WHAT'S WRONG   Trader who consistently fires at 4/8 (against advice)
+                 has no visibility into their accuracy at that level.
+  FIX            Iterate all 0-8 scores. Show "(no data)" for empty
+                 buckets. Group with horizontal rule:
+                   À éviter (<5)
+                   Recommandé (≥5)
+
+------------------------------------------------------------------------------
+F-95 [MINOR] Keyboard-listener attach/detach races with R-press
+------------------------------------------------------------------------------
+  LOCATION       AnalysisPanel.tsx:846-855
+  FIX            Use ref to hold current buildRequest. Single static
+                 listener reads through it.
+
+------------------------------------------------------------------------------
+F-96 [MINOR] parseCatalyst regex case-sensitive
+------------------------------------------------------------------------------
+  LOCATION       AnalysisPanel.tsx:266-268
+  WHAT'S WRONG   "Now:" or "RISK :" (extra space) breaks parser.
+  FIX            Case-insensitive regex with optional whitespace:
+                   /now\s*:\s*([\s\S]+?)(?=\s*risk\s*:|$)/i
+
+================================================================================
+16. POSITIVE OBSERVATIONS
+================================================================================
+
+P-01  Type system is the spine. lib/types.ts is a single source of truth,
+      imported everywhere, very few `any` casts. Confidence-builder.
+
+P-02  Mock-fallback design pattern in /api/analyze + /api/briefing — the
+      dashboard remains demo-able without an API key, derives plausible
+      data from snapshot. Strong design choice.
+
+P-03  ResizeObserver + dynamic import for lightweight-charts is correctly
+      SSR-safe. Server bundle stays clean.
+
+P-04  framedTimeframeRef fix for chart-zoom-reset is well-commented and
+      surgical. Recently shipped, works correctly.
+
+P-05  useAlerts dedupe via alertFiredRef Set — clean, on-mount re-seeding
+      from stored alerts is thoughtful.
+
+P-06  Tooltip viewport-clamping logic with 8px safety margin prevents off-
+      screen clipping — better than every other dashboard tooltip
+      implementation I've seen.
+
+P-07  Belt-and-suspenders calendar gate: prompt instructs FLAT, then
+      route enforces FLAT server-side. Good defensive design.
+
+P-08  parsePrice centralization explicitly noted as deduping three
+      near-identical earlier copies. Clean refactor.
+
+P-09  Per-severity AlertBanner heights exported as constants and
+      consumed by page-level spacer math. Layout contract is explicit,
+      not magic.
+
+P-10  getCurrentSession uses UTC universally. Server/client agree on
+      session name without TZ drift.
+
+P-11  Catalyst NOW/RISK/TRIGGER structured format is a smart trick —
+      gives the user a scannable trade thesis without rambling.
+
+P-12  Mock analysis derives entryType from RSI + ATR distance — even
+      mock cards behave plausibly.
+
+P-13  Calibration card has clear isCalibrated gating (≥10 outcomes) —
+      respects the trader's intelligence by not showing meaningless
+      sub-statistical percentages.
+
+P-14  Confluence-score color tiering at 6+/4+/<4 mirrors the system
+      prompt's "5 of 8" rule. Visual encoding maps to logic.
+
+P-15  data-section / data-param / data-signal / data-field / data-catalyst
+      attributes form an implicit DOM-test surface — easy to write E2E
+      tests against.
+
+================================================================================
+17. TOP 10 IMPROVEMENTS (by user-impact / effort ratio)
+================================================================================
+
+  1. F-01 — Fix the price API mapping (BLOCKING).
+     The dashboard is silently running with H/L/CHANGE/OPEN = 0. One file,
+     ~20 lines: either point at a feed that returns OHLC (Yahoo GC=F
+     already in use for technicals) or derive from the existing 1H
+     candles. Single highest-impact fix in the codebase.
+
+  2. F-90 — Distinguish "live data" from "fallback".
+     Add meta.source: 'live' | 'mock' to every API response. Surface a
+     "DONNÉES SIMULÉES" badge on impacted panels when any source is mock.
+     Buys trust at low cost.
+
+  3. F-77 — Tooltip focus support.
+     Pretty much the entire tooltip layer is keyboard-invisible. Add
+     onFocus/onBlur + tabIndex={0} to the wrapper. ~10 lines, dramatically
+     improves a11y.
+
+  4. F-78 — Add glyphs paired with color.
+     Color-only signaling fails for ~6% of male traders. ▲▼ on change
+     cells, ⬆⬇ on flash, dot+letter on signal grid. Touches every
+     component but each touch is small.
+
+  5. F-46/F-57 — Dialog focus management for Journal & Briefing.
+     role="dialog", aria-modal, focus on open, trap focus. Standard
+     pattern, library-free, ~30 lines per modal.
+
+  6. F-82 — Centralize copy in lib/copy.ts; finish French translation.
+     Dashboard switches mid-paragraph today. Single map fixes the locale
+     split and unblocks future locales.
+
+  7. F-26 — Pattern markers on the right candle.
+     Currently every marker stamps on the latest bar — visually wrong.
+     Plumb candle index through DetectedPattern. Detector already knows.
+
+  8. F-58 — Briefing modal "dismissed for today" memory.
+     Trader closes auto-popped briefing once → don't re-pop same day.
+     localStorage briefingDismissedFor: 'YYYY-MM-DD'. 5-line fix.
+
+  9. F-47/F-48 — Journal validation + close confirmation.
+     Bad data → corrupt personalPatterns → corrupt model context →
+     corrupt future analyses. Add direction-aware validation on entry/
+     stop/target and one-click confirm before close.
+
+ 10. F-91 — Negative-price guard in parsePrice.
+     parseFloat('-3281') is finite > 0 — but gold can't be negative.
+     After parse: n > 0 ? n : 0. Three-line fix prevents a class of weird
+     outcome misclassifications.
+
+================================================================================
+18. FINAL NOTES
+================================================================================
+
+ - The codebase is well-commented and has an unusually consistent design
+   system. UX issues are mostly shallow polish, not structural rewrites.
+
+ - Two structural problems concentrated:
+   (a) F-01 — price upstream broken in a way that poisons every
+       downstream surface.
+   (b) F-82 — i18n half-finished.
+   Both fixable in one focused day of work.
+
+ - The a11y story is the weakest dimension. Tooltips don't focus, modals
+   don't manage focus, color is the only signaling vocabulary, no live
+   regions for price/alerts. Biggest gap between "looks polished" and
+   "is professional."
+
+ - Total findings: 96 + 15 positives.
+
+================================================================================
+END OF FUNCTIONAL + UX REPORT
+================================================================================
