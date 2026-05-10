@@ -297,7 +297,10 @@ export default function Page() {
                   // On stack mode, NewsFeed takes a bounded
                   // height so the calendar below it is always
                   // visible without scrolling THROUGH it.
-                  minHeight: isStacked ? '320px' : 0,
+                  // 380px (was 320px) gives 4-5 visible rows on
+                  // mobile so users can scan without immediate
+                  // scrolling — testers reported it felt cramped.
+                  minHeight: isStacked ? '380px' : 0,
                   overflow: 'hidden',
                 }}
               >

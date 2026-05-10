@@ -42,7 +42,7 @@ import type { ImpactLevel, NewsArticle, NewsSentiment } from '@/lib/types'
 // asymmetric (no BAISSE counterpart). The new four chips give
 // the trader a symmetric directional pair plus a single
 // "urgent now" focus mode.
-type Filter = 'ALL' | 'URGENT' | 'BULL' | 'BEAR'
+type Filter = 'ALL' | 'URGENT' | 'DIRECTIONAL' | 'BULL' | 'BEAR'
 
 // ─────────────────────────────────────────────────────────────────
 // Helpers
@@ -257,6 +257,16 @@ const FILTER_META: Record<Filter, {
     tooltip:
       "Affiche uniquement les articles à FORT impact (Fed, CPI, NFP, FOMC, rendements, crise). Ce qui peut faire bouger l'or maintenant — à lire en priorité.",
   },
+  DIRECTIONAL: {
+    label: 'DIRECTIONNEL',
+    glyph: '⇅',
+    palette: {
+      active: { fg: '#e5e5e5', bg: '#1a1a1a', border: '#2a2a2a' },
+      inactive: { fg: '#888888' },
+    },
+    tooltip:
+      "Affiche uniquement les articles haussiers OU baissiers — masque le bruit neutre qui n'oriente pas le prix. Filtre par défaut au chargement.",
+  },
   BULL: {
     label: 'HAUSSIERS',
     glyph: '▲',
@@ -279,9 +289,17 @@ const FILTER_META: Record<Filter, {
   },
 }
 
-// Filter chip ordering — TOUS first (default), then URGENT
-// (highest workflow priority), then directional pair.
-const FILTER_ORDER: Filter[] = ['ALL', 'URGENT', 'BULL', 'BEAR']
+// Filter chip ordering — DIRECTIONNEL first because it's the
+// default (drops neutral noise on initial load), then URGENT,
+// then the granular BULL/BEAR pair, then TOUS as the escape
+// hatch for traders who want everything.
+const FILTER_ORDER: Filter[] = [
+  'DIRECTIONAL',
+  'URGENT',
+  'BULL',
+  'BEAR',
+  'ALL',
+]
 
 // ─────────────────────────────────────────────────────────────────
 // Main component
@@ -290,7 +308,11 @@ const FILTER_ORDER: Filter[] = ['ALL', 'URGENT', 'BULL', 'BEAR']
 export default function NewsFeed() {
   const { articles, loading, error, lastUpdated } = useNews()
   const [hovered, setHovered] = useState<number | null>(null)
-  const [filter, setFilter] = useState<Filter>('ALL')
+  // [NOISE-FILTER] Default to DIRECTIONAL so first-render shows
+  // only bull/bear articles. Users reported the unfiltered ALL
+  // default surfaced too much neutral noise that didn't move
+  // price. ALL is still one click away in the chip row.
+  const [filter, setFilter] = useState<Filter>('DIRECTIONAL')
 
   // Fade-in when articles array length changes — fires on first
   // load and any subsequent refresh that adds/removes items.
@@ -332,6 +354,10 @@ export default function NewsFeed() {
   // Apply the active filter to produce the visible list.
   const visibleArticles: NewsArticle[] = useMemo(() => {
     if (filter === 'URGENT') return articles.filter((a) => a.impact === 'HIGH')
+    if (filter === 'DIRECTIONAL')
+      return articles.filter(
+        (a) => a.sentiment === 'BULLISH' || a.sentiment === 'BEARISH'
+      )
     if (filter === 'BULL')
       return articles.filter((a) => a.sentiment === 'BULLISH')
     if (filter === 'BEAR')
@@ -346,6 +372,9 @@ export default function NewsFeed() {
     () => ({
       ALL: articles.length,
       URGENT: articles.filter((a) => a.impact === 'HIGH').length,
+      DIRECTIONAL: articles.filter(
+        (a) => a.sentiment === 'BULLISH' || a.sentiment === 'BEARISH'
+      ).length,
       BULL: articles.filter((a) => a.sentiment === 'BULLISH').length,
       BEAR: articles.filter((a) => a.sentiment === 'BEARISH').length,
     }),
@@ -356,11 +385,13 @@ export default function NewsFeed() {
   const footerLabel =
     filter === 'URGENT'
       ? `${visibleArticles.length} URGENT${visibleArticles.length > 1 ? 'S' : ''}`
-      : filter === 'BULL'
-        ? `${visibleArticles.length} HAUSSIER${visibleArticles.length > 1 ? 'S' : ''}`
-        : filter === 'BEAR'
-          ? `${visibleArticles.length} BAISSIER${visibleArticles.length > 1 ? 'S' : ''}`
-          : `${articles.length} ARTICLE${articles.length > 1 ? 'S' : ''}`
+      : filter === 'DIRECTIONAL'
+        ? `${visibleArticles.length} DIRECTIONNEL${visibleArticles.length > 1 ? 'S' : ''}`
+        : filter === 'BULL'
+          ? `${visibleArticles.length} HAUSSIER${visibleArticles.length > 1 ? 'S' : ''}`
+          : filter === 'BEAR'
+            ? `${visibleArticles.length} BAISSIER${visibleArticles.length > 1 ? 'S' : ''}`
+            : `${articles.length} ARTICLE${articles.length > 1 ? 'S' : ''}`
 
   // Pick the list body branch based on hook state + filter.
   let body: React.ReactNode
@@ -472,7 +503,12 @@ export default function NewsFeed() {
                   minWidth: 0,
                 }}
               >
-                {a.title}
+                {/* [TRUNC] Belt-and-braces char cap. CSS ellipsis
+                    handles narrow viewports correctly, but if a
+                    flex/CSS edge case ever lets the row overflow,
+                    a 90-char hard cap keeps rows visually tight.
+                    Full title remains in the tooltip above. */}
+                {a.title.length > 90 ? `${a.title.slice(0, 87)}…` : a.title}
               </span>
             </Tooltip>
             <span

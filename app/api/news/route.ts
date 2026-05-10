@@ -334,6 +334,12 @@ export async function GET() {
       // — the click handler in NewsFeed.tsx hands a.url straight
       // to window.open, which executes javascript:/data: URIs.
       .filter((a) => !!a.title && !!a.url && isSafeArticleUrl(a.url))
+      // [NOISE-FILTER] Drop LOW-impact NEUTRAL items at the source.
+      // These are pure noise — neither attention-worthy nor
+      // directional ("Gold ETF holdings unchanged"). HIGH-impact
+      // NEUTRAL stays (e.g. Powell speech with two-way risk — the
+      // trader still needs to know it's happening).
+      .filter((a) => !(a.impact === 'LOW' && a.sentiment === 'NEUTRAL'))
       .slice(0, MAX_ARTICLES)
 
     if (articles.length === 0) {
