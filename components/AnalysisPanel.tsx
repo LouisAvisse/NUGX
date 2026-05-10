@@ -24,7 +24,6 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import Tooltip from '@/components/Tooltip'
-import PositionSizingCard from '@/components/PositionSizingCard'
 import CopyOrderButton from '@/components/CopyOrderButton'
 import PerformanceSummaryCard from '@/components/PerformanceSummaryCard'
 import { useAnalysis } from '@/lib/hooks/useAnalysis'
@@ -1566,15 +1565,6 @@ export default function AnalysisPanel({
             empty slot. Pure read over localStorage, no network. */}
         {!showSkeleton && !showError && rehearsal && rehearsal.matchKind !== 'NONE' && rehearsal.accuracy !== null ? (
           <RehearsalRow stats={rehearsal} />
-        ) : null}
-
-        {/* [PHASE-12.4] Position-sizing card — translates the
-            trader's account size + risk % into the correct lot
-            size for THIS trade's stop distance. Persists inputs
-            in localStorage. Hides itself gracefully when the
-            recommendation is FLAT or levels haven't loaded. */}
-        {!showSkeleton && !showError ? (
-          <PositionSizingCard analysis={data} />
         ) : null}
 
         {/* [PHASE-12.4] Copy order to clipboard. Renders only when

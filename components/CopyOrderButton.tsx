@@ -9,12 +9,9 @@
 // "press" cycle. The selected format is sticky in localStorage so
 // the trader's preference survives reloads.
 //
-// Lot size comes from the position-sizing calculator (same source
-// of truth as PositionSizingCard) — keeps the order ticket
-// internally consistent with the risk numbers shown above it.
-//
-// Falls back to "0.10" lots if no profile or sizing math is
-// available, which is the most-common retail starting size.
+// Lot size is fixed at the most-common retail default (0.10 / 10oz).
+// The trader sizes their own position in their broker — this button
+// only ships the level template; size is intentionally not opinionated.
 
 'use client'
 
@@ -25,12 +22,17 @@ import {
   type OrderFormat,
   type OrderTicket,
 } from '@/lib/orderClipboard'
-import {
-  computePositionSizing,
-  parseLevelString,
-} from '@/lib/positionSizing'
-import { useTraderProfile } from '@/lib/hooks/useTraderProfile'
 import type { AnalysisResult, TradeDirection } from '@/lib/types'
+
+const DEFAULT_LOT_SIZE = 0.1
+
+function parseLevelString(raw: string): number | null {
+  if (!raw) return null
+  const match = raw.match(/-?\d+(?:[.,]\d+)?/)
+  if (!match) return null
+  const n = Number(match[0].replace(',', '.'))
+  return Number.isFinite(n) ? n : null
+}
 
 const STORAGE_KEY = 'goldDashboard_orderFormat'
 const FORMAT_CYCLE: OrderFormat[] = ['MT5', 'CTRADER', 'TRADINGVIEW', 'PLAIN']
@@ -73,7 +75,6 @@ function saveFormat(format: OrderFormat): void {
 }
 
 export default function CopyOrderButton({ analysis, symbol = 'XAUUSD' }: Props) {
-  const { profile } = useTraderProfile()
   const [format, setFormat] = useState<OrderFormat>(loadFormat)
   const [feedback, setFeedback] = useState<'idle' | 'copied' | 'failed'>('idle')
 
@@ -95,13 +96,8 @@ export default function CopyOrderButton({ analysis, symbol = 'XAUUSD' }: Props) 
     const target = parseLevelString(analysis.target)
     if (entry === null || stop === null || target === null) return null
 
-    // Lot size — derive from position-sizing math when available;
-    // fall back to 0.10 (10oz) for the most-common retail size.
-    const sizing = computePositionSizing({ profile, entry, stop, direction })
-    const lotSize = sizing && sizing.miniLots >= 1 ? sizing.miniLots / 10 : 0.1
-
-    return { symbol, direction, lotSize, entry, stop, target }
-  }, [analysis, profile, symbol])
+    return { symbol, direction, lotSize: DEFAULT_LOT_SIZE, entry, stop, target }
+  }, [analysis, symbol])
 
   if (!ticket) return null
 
