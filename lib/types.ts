@@ -931,6 +931,29 @@ export interface InvalidationAlert {
   dismissed: boolean
 }
 
+// [WATCHDOG] Continuous thesis-health status. Set by the
+// useThesisHealth hook based on MACD cross / RSI / EMA20 state
+// vs the active analysis's direction. INACTIVE = no live thesis
+// (FLAT or no analysis). INTACT = supporting signals still aligned.
+// WEAKENING = 2+ of 3 weakness signals fire (alert raised).
+// BROKEN = invalidation level crossed (handled by useAlerts).
+export type ThesisStatus = 'INACTIVE' | 'INTACT' | 'WEAKENING' | 'BROKEN'
+
+// What a thesis-weakening evaluation produces. `signals` lists
+// which checks fired, used for the alert message + the chip
+// tooltip on the copilot card.
+export interface ThesisHealth {
+  status: ThesisStatus
+  signals: ThesisWeaknessSignal[]   // empty when INTACT/INACTIVE
+}
+
+// Per-signal weakness flags. Stable strings so they're safe to
+// embed in alert messages and to compare in tests.
+export type ThesisWeaknessSignal =
+  | 'MACD_FLIP'      // MACD crossed against the position direction
+  | 'RSI_EXIT'       // RSI left the band that supports the bias
+  | 'EMA20_BREAK'    // price closed past EMA20 against the position
+
 // ─────────────────────────────────────────────────────────────────
 // [SPRINT-1] Confidence calibration
 // Stats that answer "when Claude says HIGH confidence, how often

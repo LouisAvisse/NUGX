@@ -30,6 +30,7 @@ import { useGoldPrice } from '@/lib/hooks/useGoldPrice'
 import { useSignals } from '@/lib/hooks/useSignals'
 import { useNews } from '@/lib/hooks/useNews'
 import { useTechnicals } from '@/lib/hooks/useTechnicals'
+import { useThesisHealth } from '@/lib/hooks/useThesisHealth'
 import { useCalendar } from '@/lib/hooks/useCalendar'
 import { useHistory } from '@/lib/hooks/useHistory'
 import { computeCalibration } from '@/lib/calibration'
@@ -887,6 +888,16 @@ export default function AnalysisPanel({
   const news = useNews()
   const technicals = useTechnicals()
   const calendar = useCalendar()
+  // [WATCHDOG] Continuous thesis-health monitor. Reads the live
+  // technicals snapshot + price tick and decides INTACT / WEAKENING
+  // / BROKEN. When 2-of-3 weakness signals fire, it writes a
+  // WARNING alert to localStorage; useAlerts in page.tsx picks it
+  // up on its 10s refresh and surfaces it via AlertBanner.
+  const thesisHealth = useThesisHealth({
+    lastAnalysis: analysis.data ?? null,
+    currentPrice: goldPrice.data?.price ?? null,
+    technicals: technicals.indicators,
+  })
   // [SPRINT-5] Persist every successful analysis to localStorage
   // history; the hook also runs the path-replay outcome checker
   // in the background so we don't need to manage that here.
@@ -1443,6 +1454,69 @@ export default function AnalysisPanel({
             )}
           </div>
         </div>
+
+        {/* [WATCHDOG] Thesis-health chip. Hidden when there's no
+            active analysis (INACTIVE) — the badge would be noise.
+            INTACT shows a small green check; WEAKENING is amber +
+            lists which signals fired; BROKEN is red. The chip is
+            an at-a-glance read; the matching alert (if any) is
+            still surfaced through the AlertBanner stack at the
+            top of the page. */}
+        {data && !showError && thesisHealth.status !== 'INACTIVE' && (
+          <div
+            data-field="thesis-health"
+            style={{ marginTop: '8px', fontSize: '9px', letterSpacing: '0.04em' }}
+          >
+            {(() => {
+              const labelMap: Record<
+                'MACD_FLIP' | 'RSI_EXIT' | 'EMA20_BREAK',
+                string
+              > = {
+                MACD_FLIP: 'MACD inversé',
+                RSI_EXIT: 'RSI hors zone',
+                EMA20_BREAK: 'cassure EMA20',
+              }
+              if (thesisHealth.status === 'INTACT') {
+                return (
+                  <Tooltip
+                    position="left"
+                    content="Le copilote surveille en continu MACD, RSI et la position vs EMA20. Tant que 0 ou 1 signal d'affaiblissement est actif, la thèse reste intacte."
+                  >
+                    <span style={{ color: '#4ade80' }}>
+                      ✓ THÈSE INTACTE
+                    </span>
+                  </Tooltip>
+                )
+              }
+              if (thesisHealth.status === 'WEAKENING') {
+                const reasons = thesisHealth.signals
+                  .map((s) => labelMap[s])
+                  .join(' + ')
+                return (
+                  <Tooltip
+                    position="left"
+                    content={`Au moins 2 des 3 signaux d'affaiblissement (MACD inversé, RSI hors zone, cassure EMA20) sont actifs. Réévaluer la position avant que le stop ou l'invalidation soient touchés. Détails: ${reasons}.`}
+                  >
+                    <span style={{ color: '#fbbf24' }}>
+                      ⚠ THÈSE AFFAIBLIE — {reasons}
+                    </span>
+                  </Tooltip>
+                )
+              }
+              // BROKEN
+              return (
+                <Tooltip
+                  position="left"
+                  content="L'invalidation a été franchie — le scénario n'est plus valide. Sortir ou couper la position si elle est encore ouverte."
+                >
+                  <span style={{ color: '#f87171' }}>
+                    ✗ THÈSE INVALIDÉE
+                  </span>
+                </Tooltip>
+              )
+            })()}
+          </div>
+        )}
 
         {/* entryTiming + entryType badge on a second line. */}
         {(showSkeleton || (data && !showError)) && (
